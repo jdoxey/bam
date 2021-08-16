@@ -1,2 +1,25 @@
-build:
-	echo 'Bam!'
+build: test product
+	cp build-files/bam product/bam
+
+product:
+	mkdir product
+
+.PHONY: test
+test: build-files/bam build-files/test
+	build-files/test
+
+build-files/bam: build-files build-files/lex.yy.c
+	(cd build-files; cc -o bam lex.yy.c)
+
+build-files/lex.yy.c: src/bamFlexScanner.l
+	flex -o build-files/lex.yy.c src/bamFlexScanner.l	
+
+build-files/test: build-files src/test/test.c
+	cc -o build-files/test src/test/test.c
+
+build-files:
+	mkdir build-files
+
+clean:
+	rm -rf build-files
+	rm -rf product
