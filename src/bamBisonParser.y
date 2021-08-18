@@ -8,14 +8,14 @@
 
 %%
 
-list-of-statements: /* empty */
-                  | list-of-statements statement
-                  | list-of-statements statement end-of-statement
-				  ;
+listOfStatements: /* empty */
+                | listOfStatements statement
+                | listOfStatements statement endOfStatement
+                ;
 
-statement: IDENTIFIER     { puts("IDENTIFIER"); };
+statement       : IDENTIFIER     { puts("IDENTIFIER"); };
 
-end-of-statement: SEMICOLON | NEWLINE ;
+endOfStatement  : SEMICOLON | NEWLINE ;
 
 %%
 
