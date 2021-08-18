@@ -13,7 +13,7 @@ int main() {
 #endif
 
     fgets(output_string, sizeof(output_string), output_pipe);
-    assert(strcmp(output_string, "IDENTIFIER: myvariable\n") == 0);
+    assert(strcmp(output_string, "IDENTIFIER\n") == 0);
 
 #ifdef _WIN32
     _pclose(output_pipe);

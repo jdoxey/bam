@@ -1,3 +1,4 @@
+.PHONY: build
 build: test product
 	cp build-files/bam product/bam
 
@@ -9,10 +10,13 @@ test: build-files/bam build-files/test
 	build-files/test
 
 build-files/bam: build-files build-files/lex.yy.c
-	(cd build-files; cc -o bam lex.yy.c)
+	(cd build-files; cc -o bam lex.yy.c bamBisonParser.tab.c)
 
-build-files/lex.yy.c: src/bamFlexScanner.l
+build-files/lex.yy.c: src/bamFlexScanner.l build-files/bamBisonParser.tab.h
 	flex -o build-files/lex.yy.c src/bamFlexScanner.l	
+
+build-files/bamBisonParser.tab.h: src/bamBisonParser.y
+	bison --defines=build-files/bamBisonParser.tab.h --output=build-files/bamBisonParser.tab.c src/bamBisonParser.y
 
 build-files/test: build-files src/test/test.c
 	cc -o build-files/test src/test/test.c
@@ -20,6 +24,7 @@ build-files/test: build-files src/test/test.c
 build-files:
 	mkdir build-files
 
+.PHONY: clean
 clean:
 	rm -rf build-files
 	rm -rf product

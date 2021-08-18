@@ -8,10 +8,13 @@ test: build-files\bam.exe build-files\test.exe
 	build-files\test.exe
 
 build-files\bam.exe: build-files\lex.yy.c
-	cl /Fe"build-files\bam.exe" /Fo"build-files\bam.obj" build-files\lex.yy.c
+	cd build-files & cl /Fe"bam.exe" *.c
 
-build-files\lex.yy.c: build-files src\bamFlexScanner.l
+build-files\lex.yy.c: build-files src\bamFlexScanner.l build-files\bamBisonParser.tab.h
 	tools\windows\win_flex_bison\win_flex.exe -o build-files\lex.yy.c --wincompat src\bamFlexScanner.l
+
+build-files\bamBisonParser.tab.h: src\bamBisonParser.y
+	tools\windows\win_flex_bison\win_bison.exe --defines=build-files\bamBisonParser.tab.h --output=build-files\bamBisonParser.tab.c src\bamBisonParser.y
 
 build-files\test.exe: build-files src\test\test.c
 	cl /Fe"build-files\test.exe" /Fo"build-files\test.obj" src\test\test.c

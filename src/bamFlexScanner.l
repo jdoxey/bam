@@ -1,17 +1,14 @@
 %option noyywrap
 
 %{
-#include <stdio.h>
+#include "bamBisonParser.tab.h"
 %}
 
 %%
 
-[a-zA-Z_][a-zA-Z0-9_]*     { printf("IDENTIFIER: %s\n", yytext); }
-\r?\n                      { printf("NEWLINE\n"); }
-[ \t]                      { }
+";"                        { return SEMICOLON; }
+[a-zA-Z_][a-zA-Z0-9_]*     { return IDENTIFIER; }
+\r?\n                      { return NEWLINE; }
+[ \t]                      { /* ignore whitespace */ }
 
 %%
-
-int main(int argc, char **argv) {
-	yylex();
-}
