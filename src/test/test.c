@@ -3,21 +3,44 @@
 #include <assert.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define popen _popen
+#define pclose _pclose
+#endif
+
+void testFileShouldOutput(char *fileName, char *expectedOutput);
+
 int main() {
-    FILE *output_pipe;
-    char output_string[1024];
-#ifdef _WIN32
-    output_pipe = _popen("type src\\test\\examples\\identifier.bam | build-files\\bam", "r");
-#else
-    output_pipe = popen("cat src/test/examples/identifier.bam | build-files/bam", "r");
-#endif
+	testFileShouldOutput("identifier.bam", "IDENTIFIER\n");
+	testFileShouldOutput("identifier-newline.bam", "IDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon.bam", "IDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon-newline.bam", "IDENTIFIER\n");
 
-    fgets(output_string, sizeof(output_string), output_pipe);
-    assert(strcmp(output_string, "IDENTIFIER\n") == 0);
+	testFileShouldOutput("two-identifiers.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("two-identifiers-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("two-identifiers-semicolon.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("two-identifiers-semicolon-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+}
 
+void testFileShouldOutput(char *fileName, char *expectedOutput) {
 #ifdef _WIN32
-    _pclose(output_pipe);
+	char *commandLineFormatString = "type src\\test\\examples\\%s | build-files\\bam";
 #else
-    pclose(output_pipe);
+	char *commandLineFormatString = "cat src/test/examples/%s | build-files/bam";
 #endif
+	char commandLine[1024];
+	sprintf(commandLine, commandLineFormatString, fileName);
+
+	FILE *outputPipe;
+	char actualOutput[1024] = { 0 };
+	outputPipe = popen(commandLine, "r");
+	fread(actualOutput, sizeof(actualOutput), 1, outputPipe);
+	pclose(outputPipe);
+
+	if (strcmp(actualOutput, expectedOutput) != 0) {
+		puts("TEST FAILED!");
+		printf("Parsing file '%s', was expecting '%s', but got '%s'\n",
+				fileName, expectedOutput, actualOutput);
+		exit(1);
+	}
 }
