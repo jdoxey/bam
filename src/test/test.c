@@ -16,10 +16,15 @@ int main() {
 	testFileShouldOutput("identifier-semicolon.bam", "IDENTIFIER\n");
 	testFileShouldOutput("identifier-semicolon-newline.bam", "IDENTIFIER\n");
 
-	testFileShouldOutput("two-identifiers.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("two-identifiers-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("two-identifiers-semicolon.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("two-identifiers-semicolon-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon-identifier.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon-identifier-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon-identifier-semicolon.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon-identifier-semicolon-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+
+	testFileShouldOutput("identifier-newline-identifier.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-newline-identifier-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-newline-identifier-semicolon.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-newline-identifier-semicolon-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
 }
 
 void testFileShouldOutput(char *fileName, char *expectedOutput) {
