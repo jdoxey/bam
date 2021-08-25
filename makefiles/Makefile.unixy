@@ -10,7 +10,7 @@ test: build-files/bam build-files/test
 	build-files/test
 
 build-files/bam: build-files build-files/lex.yy.c
-	(cd build-files; cc -o bam lex.yy.c bamBisonParser.tab.c)
+	(cd build-files; cc -o bam -Wno-implicit-function-declaration lex.yy.c bamBisonParser.tab.c)
 
 build-files/lex.yy.c: src/bamFlexScanner.l build-files/bamBisonParser.tab.h
 	flex -o build-files/lex.yy.c src/bamFlexScanner.l	

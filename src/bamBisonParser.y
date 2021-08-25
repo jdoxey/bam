@@ -29,4 +29,5 @@ int main(int argc, char **argv) {
 
 int yyerror(const char *s) {
 	fprintf(stderr, "error: %s\n", s);
+	return 0;
 }
