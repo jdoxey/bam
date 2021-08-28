@@ -11,20 +11,20 @@
 void testFileShouldOutput(char *fileName, char *expectedOutput);
 
 int main() {
-	testFileShouldOutput("identifier.bam", "IDENTIFIER\n");
-	testFileShouldOutput("identifier-newline.bam", "IDENTIFIER\n");
-	testFileShouldOutput("identifier-semicolon.bam", "IDENTIFIER\n");
-	testFileShouldOutput("identifier-semicolon-newline.bam", "IDENTIFIER\n");
+	testFileShouldOutput("identifier.bam", "IDENTIFIER: myvariable\n");
+	testFileShouldOutput("identifier-newline.bam", "IDENTIFIER: myvariable\n");
+	testFileShouldOutput("identifier-semicolon.bam", "IDENTIFIER: myvariable\n");
+	testFileShouldOutput("identifier-semicolon-newline.bam", "IDENTIFIER: myvariable\n");
 
-	testFileShouldOutput("identifier-semicolon-identifier.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("identifier-semicolon-identifier-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("identifier-semicolon-identifier-semicolon.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("identifier-semicolon-identifier-semicolon-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-semicolon-identifier.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
+	testFileShouldOutput("identifier-semicolon-identifier-newline.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
+	testFileShouldOutput("identifier-semicolon-identifier-semicolon.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
+	testFileShouldOutput("identifier-semicolon-identifier-semicolon-newline.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
 
-	testFileShouldOutput("identifier-newline-identifier.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("identifier-newline-identifier-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("identifier-newline-identifier-semicolon.bam", "IDENTIFIER\nIDENTIFIER\n");
-	testFileShouldOutput("identifier-newline-identifier-semicolon-newline.bam", "IDENTIFIER\nIDENTIFIER\n");
+	testFileShouldOutput("identifier-newline-identifier.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
+	testFileShouldOutput("identifier-newline-identifier-newline.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
+	testFileShouldOutput("identifier-newline-identifier-semicolon.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
+	testFileShouldOutput("identifier-newline-identifier-semicolon-newline.bam", "IDENTIFIER: myvariable\nIDENTIFIER: othervariable\n");
 }
 
 void testFileShouldOutput(char *fileName, char *expectedOutput) {

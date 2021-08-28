@@ -9,14 +9,18 @@ product:
 test: build-files/bam build-files/test
 	build-files/test
 
-build-files/bam: build-files build-files/lex.yy.c
-	(cd build-files; cc -o bam -Wno-implicit-function-declaration lex.yy.c bamBisonParser.tab.c)
+build-files/bam: build-files build-files/lex.yy.c build-files/BamASTFiles
+	(cd build-files; cc -o bam -Wno-implicit-function-declaration *.c)
 
 build-files/lex.yy.c: src/bamFlexScanner.l build-files/bamBisonParser.tab.h
-	flex -o build-files/lex.yy.c src/bamFlexScanner.l	
+	flex -o build-files/lex.yy.c src/bamFlexScanner.l
 
 build-files/bamBisonParser.tab.h: src/bamBisonParser.y
 	bison --defines=build-files/bamBisonParser.tab.h --output=build-files/bamBisonParser.tab.c src/bamBisonParser.y
+
+.PHONY: build-files/BamASTFiles
+build-files/BamASTFiles: src/*.c
+	cp src/*.[ch] build-files/
 
 build-files/test: build-files src/test/test.c
 	cc -o build-files/test src/test/test.c
