@@ -27,7 +27,7 @@ program          : listOfStatements statement                     { $$ = BamASTL
                  | listOfStatements statement SEMICOLON NEWLINE   { $$ = BamASTListOfStatements_new($1, $2); BamASTListOfStatements_print($$); }
                  ;
 
-listOfStatements : /* empty */
+listOfStatements : /* empty */                                    { $$ = NULL; }
                  | listOfStatements statement endOfStatement      { $$ = BamASTListOfStatements_new($1, $2); }
                  ;
 
