@@ -7,7 +7,7 @@ product:
 test: build-files\bam.exe build-files\test.exe
 	build-files\test.exe
 
-build-files\bam.exe: build-files\lex.yy.c
+build-files\bam.exe: build-files\lex.yy.c build-files\BamASTFiles
 	cd build-files & cl /Fe"bam.exe" *.c
 
 build-files\lex.yy.c: build-files src\bamFlexScanner.l build-files\bamBisonParser.tab.h
@@ -15,6 +15,9 @@ build-files\lex.yy.c: build-files src\bamFlexScanner.l build-files\bamBisonParse
 
 build-files\bamBisonParser.tab.h: src\bamBisonParser.y
 	tools\windows\win_flex_bison\win_bison.exe --defines=build-files\bamBisonParser.tab.h --output=build-files\bamBisonParser.tab.c src\bamBisonParser.y
+
+build-files\BamASTFiles:
+	copy src\BamAST*.c build-files\ & copy src\BamAST*.h build-files\
 
 build-files\test.exe: build-files src\test\test.c
 	cl /Fe"build-files\test.exe" /Fo"build-files\test.obj" src\test\test.c
