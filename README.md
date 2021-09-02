@@ -11,3 +11,4 @@ very early stages
 ## High Level Goals
 - Low learning curve. Easy for beginners to understand.
 - Independance from specific platforms/technologies/companies
+- Cross platform (starting with macOS, Windows and Linux)
