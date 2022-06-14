@@ -1,6 +1,6 @@
 # Compiler Back-end Options
 
-Using an existing compiler back-end (LLVM or GCC) requires anyone wanting to compile a `bam` program to have these complex packages installed. Maybe they could run in Docker? Debugging might be tricky.
+Using an existing compiler back-end (LLVM or GCC) requires anyone wanting to compile a `bam` program to have these complex packages installed. Maybe the `bam` compiler could just include the necessary libraries from LLVM/GCC? Maybe they could run in Docker? Debugging might be tricky.
 
 ## Option Chosen: TBD
 
@@ -13,7 +13,7 @@ Using an existing compiler back-end (LLVM or GCC) requires anyone wanting to com
 - Intermediate Language makes it awesome for separating front-end and back-end, and producing machine code at a later stage.
 
 ### CONs
-- `bam` users need LLVM installed (or available)
+- `bam` users need LLVM installed (or available). Maybe the `bam` compiler could just include the necessary libraries from LLVM?
 - C++ can be esoteric to work with (reasonably high ramp-up for new developers)
 
 ## Option 2: GCC
@@ -23,8 +23,8 @@ Using an existing compiler back-end (LLVM or GCC) requires anyone wanting to com
 - May have better support for edge case architectures?
 
 ### CONs
-- `bam` users need GCC installed (or available)
-- Doesn't have an intermediate representation
+- `bam` users need GCC installed (or available). Maybe the `bam` compiler could just include the necessary libraries from GCC?
+- Not sure what the GIMBLE intermediate representation is like
 
 ## Option 3: Write generators for major assembly types
 
