@@ -11,6 +11,7 @@ Requires the `bam` developer environment to have flex/bison installed. This is o
 - Quick way to get started with reasonably complex language
 
 ### CONs
+- Tutorials and examples of using flex and bison with c++ are not straight forward
 - Harder to customise error messages and suggestions for fixes than a hand-crafted parser
 - Need workarounds if coming up against any limitations of LALR(1)
 
