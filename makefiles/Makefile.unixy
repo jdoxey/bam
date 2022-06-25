@@ -1,34 +1,44 @@
+.PHONY: help
+help:
+	@echo "Build options:"
+	@echo "   build    - Generate Flex and Bison C++ files, compile all C++ files, and run integration tests"
+	@echo "   compile  - Generate Flex and Bison C++ files, compile all C++ files"
+	@echo "   clean    - Delete 'build-files'"
+	@echo "   help     - Print this help"
+
 .PHONY: build
-build: test product
-	cp build-files/bam product/bam
+build: compile test
 
-product:
-	mkdir product
+.PHONY: compile
+compile: build-files/bam
 
-.PHONY: test
-test: build-files/bam build-files/test
-	build-files/test
+build-files/bam: codegen copy-source-files build-files/*.cpp build-files/*.h
+	clang++ -o build-files/bam build-files/*.cpp
 
-build-files/bam: build-files build-files/lex.yy.c build-files/BamASTFiles
-	(cd build-files; cc -o bam -Wno-implicit-function-declaration lex.yy.c bamBisonParser.tab.c BamASTIdentifier.c BamASTListOfStatements.c BamASTStatement.c)
-
-build-files/lex.yy.c: src/bamFlexScanner.l build-files/bamBisonParser.tab.h
-	flex -o build-files/lex.yy.c src/bamFlexScanner.l
-
-build-files/bamBisonParser.tab.h: src/bamBisonParser.y
-	bison --defines=build-files/bamBisonParser.tab.h --output=build-files/bamBisonParser.tab.c src/bamBisonParser.y
-
-.PHONY: build-files/BamASTFiles
-build-files/BamASTFiles: src/*.c
-	cp src/*.[ch] build-files/
-
-build-files/test: build-files src/test/test.c
-	cc -o build-files/test src/test/test.c
-
+# Create `build-files` directory
 build-files:
 	mkdir build-files
+
+.PHONY: codegen
+codegen: build-files/BamScanner.*  build-files/BamParser.*
+
+build-files/BamScanner.*: build-files src/bamFlexScanner.l
+	flex src/bamFlexScanner.l
+
+build-files/BamParser.*: build-files src/bamBisonParser.yy
+	bison src/bamBisonParser.yy
+
+copy-source-files: build-files src/*.cpp src/*.h
+	cp src/*.cpp build-files/
+	cp src/*.h build-files/
+
+.PHONY: test
+test: build-files/integration-tests
+	build-files/integration-tests
+
+build-files/integration-tests: src/test/IntegrationTests.cpp
+	clang++ -o build-files/integration-tests src/test/IntegrationTests.cpp
 
 .PHONY: clean
 clean:
 	rm -rf build-files
-	rm -rf product

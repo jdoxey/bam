@@ -1,17 +1,11 @@
-#ifndef BAM_AST_STATEMENT_H
-#define BAM_AST_STATEMENT_H
+#ifndef __BAMASTSTATEMENT_H__
+#define __BAMASTSTATEMENT_H__
 
-#include "BamASTIdentifier.h"
 
-enum BamASTStatementType {
-    BamASTStatementType_IDENTIFIER
+class BamASTStatement {
+public:
+    virtual void print() = 0;
 };
 
-struct BamASTStatement {
-    enum BamASTStatementType type;
-    void *data;
-};
 
-struct BamASTStatement *BamASTStatement_newIdentifier(struct BamASTIdentifier *identifier);
-
-#endif  // BAM_AST_STATEMENT_H
+#endif  // __BAMASTSTATEMENT_H__
