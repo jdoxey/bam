@@ -12,7 +12,7 @@ build: compile test
 .PHONY: compile
 compile: build-files/bam
 
-build-files/bam: codegen copy-source-files build-files/*.cpp build-files/*.h
+build-files/bam: codegen copy-source-files
 	clang++ -o build-files/bam build-files/*.cpp
 
 # Create `build-files` directory
