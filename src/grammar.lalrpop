@@ -1,0 +1,13 @@
+use std::str::FromStr;
+use crate::Expr;
+
+grammar;
+
+pub Expr: Expr = {
+    Num,
+    <l:Expr> "+" <r:Num> => Expr::Add(Box::new(l), Box::new(r)),
+};
+
+Num: Expr = {
+    r"[0-9]+" => Expr::Num(i32::from_str(<>).unwrap()),
+};

@@ -1,0 +1,20 @@
+- cross platform, Windows/macOS/Linux
+- named parameters, but very basic, not complicated like Swift
+    - e.g. only `someFunction(param1: "value1", param2: "value2")`, no anonymous parameters or separate internal and external names
+- no templated types
+- no macros
+- no structs, only objects/classes, i.e. only pass by reference for complex data structures
+    - existing classes can be extended as well as subclassed
+    - multiple inheritence?
+    - is it possible optimise calls to malloc for situations where a program needs to initialise thousands of objects?
+- no exposed pointers, e.g. no pointer arithmetic, no dereferencing etc.
+- no separation between header and implementation files, class is contained in one file
+- concurrency
+    - uses OS threads to take advantage of multiple cores and use existing optimisations
+        - will this be tricky interfacing with threading libraries on Windows/macOS/Linux?
+    - language keywords for creating new threads
+    - `atomic {}` block for modifying shared memory (and compiler warning if shared memory reads and writes are not in an `atomic` block)
+- would windowing/graphics try to interface with local libraries on Linux, macOS and Windows?
+- build process and external library management is handled by the bam toolchain
+    - build file described in yaml/yml
+- the executable dynamically links with local OS libs, e.g. glibc, libSystem.dylib or Windows libraries
