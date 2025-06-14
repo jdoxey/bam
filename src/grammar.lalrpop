@@ -4,16 +4,41 @@ use crate::{Expr, Stmt};
 grammar;
 
 pub Stmt: Stmt = {
+    AssignStmt,
+    ExprStmt,
+    IfStmt,
+};
+
+AssignStmt: Stmt = {
     <var:Ident> "=" <expr:Expr> => Stmt::Assign(var, expr),
-    <expr:Expr> => Stmt::Expr(expr),
+};
+
+ExprStmt: Stmt = {
+    <expr:CallExpr> => Stmt::Expr(expr),
+};
+
+IfStmt: Stmt = {
+    "if" <cond:CompareExpr> "{" <body:Stmt*> "}" => Stmt::If(cond, body),
 };
 
 pub Expr: Expr = {
     Num,
     Str,
     Ident => Expr::Var(<>),
-    <l:Expr> "+" <r:Num> => Expr::Add(Box::new(l), Box::new(r)),
-    <func:Ident> "(" <args:Comma<NamedArg>> ")" => Expr::Call(func, args),
+};
+
+CompareExpr: Expr = {
+    <l:Ident> "==" <r:NumLit> => Expr::Eq(Box::new(Expr::Var(l)), Box::new(Expr::Num(r))),
+};
+
+NumLit: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap(),
+};
+
+CallExpr: Expr = {
+    <func:Ident> "(" <name:Ident> ":" <value:Str> ")" => {
+        Expr::Call(func, vec![(name, value)])
+    },
 };
 
 Num: Expr = {
@@ -22,20 +47,6 @@ Num: Expr = {
 
 Str: Expr = {
     r#""[^"]*""# => Expr::Str(<>[1..<>.len()-1].to_string()),
-};
-
-NamedArg: (String, Expr) = {
-    <name:Ident> ":" <expr:Expr> => (name, expr),
-};
-
-Comma<T>: Vec<T> = {
-    <mut v:(<T> ",")*> <e:T?> => match e {
-        None => v,
-        Some(e) => {
-            v.push(e);
-            v
-        }
-    }
 };
 
 Ident: String = {

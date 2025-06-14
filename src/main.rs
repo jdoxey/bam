@@ -8,12 +8,14 @@ pub enum Expr {
     Var(String),
     Str(String),
     Call(String, Vec<(String, Expr)>),
+    Eq(Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug)]
 pub enum Stmt {
     Assign(String, Expr),
     Expr(Expr),
+    If(Expr, Vec<Stmt>),
 }
 
 lalrpop_mod!(pub grammar);
@@ -22,6 +24,7 @@ lalrpop_mod!(pub grammar);
 pub enum Value {
     Num(i32),
     Str(String),
+    Bool(bool),
 }
 
 fn eval_expr(expr: &Expr, env: &HashMap<String, Value>) -> Value {
@@ -37,6 +40,16 @@ fn eval_expr(expr: &Expr, env: &HashMap<String, Value>) -> Value {
             }
         }
         Expr::Var(name) => env.get(name).cloned().unwrap_or(Value::Num(0)),
+        Expr::Eq(l, r) => {
+            let left = eval_expr(l, env);
+            let right = eval_expr(r, env);
+            match (left, right) {
+                (Value::Num(a), Value::Num(b)) => Value::Bool(a == b),
+                (Value::Str(a), Value::Str(b)) => Value::Bool(a == b),
+                (Value::Bool(a), Value::Bool(b)) => Value::Bool(a == b),
+                _ => Value::Bool(false),
+            }
+        }
         Expr::Call(func_name, args) => {
             if func_name == "print" {
                 if let Some((param_name, expr)) = args.first() {
@@ -45,6 +58,7 @@ fn eval_expr(expr: &Expr, env: &HashMap<String, Value>) -> Value {
                         match value {
                             Value::Str(s) => println!("{}", s),
                             Value::Num(n) => println!("{}", n),
+                            Value::Bool(b) => println!("{}", b),
                         }
                         Value::Num(0)
                     } else {
@@ -60,50 +74,49 @@ fn eval_expr(expr: &Expr, env: &HashMap<String, Value>) -> Value {
     }
 }
 
+fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) {
+    match stmt {
+        Stmt::Assign(var, expr) => {
+            let value = eval_expr(expr, env);
+            env.insert(var.clone(), value);
+        }
+        Stmt::Expr(expr) => {
+            eval_expr(expr, env);
+        }
+        Stmt::If(cond, body) => {
+            let condition = eval_expr(cond, env);
+            let is_true = match condition {
+                Value::Bool(b) => b,
+                Value::Num(n) => n != 0,
+                Value::Str(s) => !s.is_empty(),
+            };
+            if is_true {
+                for stmt in body {
+                    eval_stmt(stmt, env);
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let mut env = HashMap::new();
     let parser = grammar::StmtParser::new();
     
+    // Test assignment
     let assign_stmt = "x = 5";
     let ast: Stmt = parser.parse(assign_stmt).unwrap();
-    println!("Parsed: {:#?}", ast);
+    println!("Executing: {}", assign_stmt);
+    eval_stmt(&ast, &mut env);
     
-    match ast {
-        Stmt::Assign(var, expr) => {
-            let value = eval_expr(&expr, &env);
-            match &value {
-                Value::Num(n) => println!("Assigned {} = {}", var, n),
-                Value::Str(s) => println!("Assigned {} = \"{}\"", var, s),
-            }
-            env.insert(var.clone(), value);
-        }
-        Stmt::Expr(expr) => {
-            let value = eval_expr(&expr, &env);
-            match value {
-                Value::Num(n) => println!("Result: {}", n),
-                Value::Str(s) => println!("Result: \"{}\"", s),
-            }
-        }
-    }
+    // Test simple if statement with equality
+    let if_stmt = r#"if x == 5 {
+        print(message: "x equals 5!")
+    }"#;
     
-    let print_stmt = r#"print(message: "Hello, world!")"#;
-    let print_ast: Stmt = parser.parse(print_stmt).unwrap();
-    println!("Parsed print: {:#?}", print_ast);
-    
-    match print_ast {
-        Stmt::Expr(expr) => {
-            eval_expr(&expr, &env);
-        }
-        _ => {}
-    }
-    
-    let print_var = r#"print(message: x)"#;
-    let print_var_ast: Stmt = parser.parse(print_var).unwrap();
-    
-    match print_var_ast {
-        Stmt::Expr(expr) => {
-            eval_expr(&expr, &env);
-        }
-        _ => {}
+    println!("Executing: {}", if_stmt);
+    match parser.parse(if_stmt) {
+        Ok(if_ast) => eval_stmt(&if_ast, &mut env),
+        Err(e) => println!("Parse error: {:?}", e),
     }
 }
