@@ -1,13 +1,23 @@
 use std::str::FromStr;
-use crate::Expr;
+use crate::{Expr, Stmt};
 
 grammar;
 
+pub Stmt: Stmt = {
+    <var:Ident> "=" <expr:Expr> => Stmt::Assign(var, expr),
+    <expr:Expr> => Stmt::Expr(expr),
+};
+
 pub Expr: Expr = {
     Num,
+    Ident => Expr::Var(<>),
     <l:Expr> "+" <r:Num> => Expr::Add(Box::new(l), Box::new(r)),
 };
 
 Num: Expr = {
     r"[0-9]+" => Expr::Num(i32::from_str(<>).unwrap()),
+};
+
+Ident: String = {
+    r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string(),
 };
