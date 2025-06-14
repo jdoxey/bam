@@ -6,6 +6,8 @@ pub enum Expr {
     Num(i32),
     Add(Box<Expr>, Box<Expr>),
     Var(String),
+    Str(String),
+    Call(String, Vec<(String, Expr)>),
 }
 
 #[derive(Debug)]
@@ -16,11 +18,45 @@ pub enum Stmt {
 
 lalrpop_mod!(pub grammar);
 
-fn eval_expr(expr: &Expr, env: &HashMap<String, i32>) -> i32 {
+#[derive(Debug, Clone)]
+pub enum Value {
+    Num(i32),
+    Str(String),
+}
+
+fn eval_expr(expr: &Expr, env: &HashMap<String, Value>) -> Value {
     match expr {
-        Expr::Num(n) => *n,
-        Expr::Add(l, r) => eval_expr(l, env) + eval_expr(r, env),
-        Expr::Var(name) => *env.get(name).unwrap_or(&0),
+        Expr::Num(n) => Value::Num(*n),
+        Expr::Str(s) => Value::Str(s.clone()),
+        Expr::Add(l, r) => {
+            let left = eval_expr(l, env);
+            let right = eval_expr(r, env);
+            match (left, right) {
+                (Value::Num(a), Value::Num(b)) => Value::Num(a + b),
+                _ => panic!("Cannot add non-numbers"),
+            }
+        }
+        Expr::Var(name) => env.get(name).cloned().unwrap_or(Value::Num(0)),
+        Expr::Call(func_name, args) => {
+            if func_name == "print" {
+                if let Some((param_name, expr)) = args.first() {
+                    if param_name == "message" {
+                        let value = eval_expr(expr, env);
+                        match value {
+                            Value::Str(s) => println!("{}", s),
+                            Value::Num(n) => println!("{}", n),
+                        }
+                        Value::Num(0)
+                    } else {
+                        panic!("print() requires 'message' parameter");
+                    }
+                } else {
+                    panic!("print() requires a message parameter");
+                }
+            } else {
+                panic!("Unknown function: {}", func_name);
+            }
+        }
     }
 }
 
@@ -35,17 +71,39 @@ fn main() {
     match ast {
         Stmt::Assign(var, expr) => {
             let value = eval_expr(&expr, &env);
+            match &value {
+                Value::Num(n) => println!("Assigned {} = {}", var, n),
+                Value::Str(s) => println!("Assigned {} = \"{}\"", var, s),
+            }
             env.insert(var.clone(), value);
-            println!("Assigned {} = {}", var, value);
         }
         Stmt::Expr(expr) => {
             let value = eval_expr(&expr, &env);
-            println!("Result: {}", value);
+            match value {
+                Value::Num(n) => println!("Result: {}", n),
+                Value::Str(s) => println!("Result: \"{}\"", s),
+            }
         }
     }
     
-    let use_var = "x";
-    let expr_ast: Expr = grammar::ExprParser::new().parse(use_var).unwrap();
-    let result = eval_expr(&expr_ast, &env);
-    println!("Variable x = {}", result);
+    let print_stmt = r#"print(message: "Hello, world!")"#;
+    let print_ast: Stmt = parser.parse(print_stmt).unwrap();
+    println!("Parsed print: {:#?}", print_ast);
+    
+    match print_ast {
+        Stmt::Expr(expr) => {
+            eval_expr(&expr, &env);
+        }
+        _ => {}
+    }
+    
+    let print_var = r#"print(message: x)"#;
+    let print_var_ast: Stmt = parser.parse(print_var).unwrap();
+    
+    match print_var_ast {
+        Stmt::Expr(expr) => {
+            eval_expr(&expr, &env);
+        }
+        _ => {}
+    }
 }
