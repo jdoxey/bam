@@ -7,6 +7,10 @@ edition = "2021"
 
 [dependencies]
 lalrpop-util = { version = "0.22.1", features = ["lexer"] }
+cranelift-codegen = "0.113"
+cranelift-frontend = "0.113"
+cranelift-module = "0.113"
+cranelift-object = "0.113"
 
 [build-dependencies]
 lalrpop = "0.22.1"

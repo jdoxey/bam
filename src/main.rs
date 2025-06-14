@@ -1,5 +1,8 @@
 use lalrpop_util::lalrpop_mod;
 use std::collections::HashMap;
+use std::fs;
+
+mod codegen;
 
 #[derive(Debug)]
 pub enum Expr {
@@ -99,24 +102,46 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) {
     }
 }
 
+fn compile_program(statements: &[Stmt]) -> Vec<u8> {
+    let codegen = codegen::CodeGenerator::new();
+    codegen.compile_program(statements)
+}
+
 fn main() {
-    let mut env = HashMap::new();
     let parser = grammar::StmtParser::new();
     
-    // Test assignment
-    let assign_stmt = "x = 5";
-    let ast: Stmt = parser.parse(assign_stmt).unwrap();
-    println!("Executing: {}", assign_stmt);
-    eval_stmt(&ast, &mut env);
+    // Test program for compilation
+    let program = vec![
+        "x = 42",
+        "y = 10",
+    ];
     
-    // Test simple if statement with equality
-    let if_stmt = r#"if x == 5 {
-        print(message: "x equals 5!")
-    }"#;
-    
-    println!("Executing: {}", if_stmt);
-    match parser.parse(if_stmt) {
-        Ok(if_ast) => eval_stmt(&if_ast, &mut env),
-        Err(e) => println!("Parse error: {:?}", e),
+    // Parse the statements
+    let mut statements = Vec::new();
+    for line in program {
+        match parser.parse(line) {
+            Ok(stmt) => statements.push(stmt),
+            Err(e) => {
+                println!("Parse error in '{}': {:?}", line, e);
+                return;
+            }
+        }
     }
+    
+    println!("Compiling program with {} statements...", statements.len());
+    
+    // Compile to object code
+    let object_bytes = compile_program(&statements);
+    
+    // Write object file
+    fs::write("output.o", &object_bytes).unwrap();
+    println!("Generated object file: output.o ({} bytes)", object_bytes.len());
+    
+    // For now, also run in interpreter mode for comparison
+    println!("\nRunning in interpreter mode:");
+    let mut env = HashMap::new();
+    for stmt in &statements {
+        eval_stmt(stmt, &mut env);
+    }
+    println!("Variables: {:?}", env);
 }
