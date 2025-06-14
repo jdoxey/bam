@@ -3,6 +3,7 @@
     - e.g. only `someFunction(param1: "value1", param2: "value2")`, no anonymous parameters or separate internal and external names
 - no templated types
 - no macros
+- no annotations
 - no structs, only objects/classes, i.e. only pass by reference for complex data structures
     - existing classes can be extended as well as subclassed
     - multiple inheritence?
