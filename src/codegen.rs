@@ -283,8 +283,11 @@ impl CodeGenerator {
                                 builder.func
                             );
                             
-                            // Simple direct call with SystemV convention
-                            let call_inst = builder.ins().call(simple_puts_func_ref, &[message_val]);
+                            // Test with null pointer first to isolate parameter vs call issues
+                            // If this works, the issue is in parameter passing
+                            // If this fails, the issue is in the call instruction itself
+                            let null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
+                            let call_inst = builder.ins().call(simple_puts_func_ref, &[null_ptr]);
                             let results = builder.inst_results(call_inst);
                             results[0]
                         } else {
