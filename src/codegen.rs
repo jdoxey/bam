@@ -83,12 +83,8 @@ impl CodeGenerator {
         puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
         puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         
-        // On macOS, C functions require underscore prefix
-        let puts_name = if cfg!(target_os = "macos") {
-            "_puts"
-        } else {
-            "puts"
-        };
+        // On macOS, Cranelift automatically adds underscore, so just use the base name
+        let puts_name = "puts";
         
         let puts_func_id = self.module
             .declare_function(puts_name, Linkage::Import, &puts_sig)
