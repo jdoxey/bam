@@ -71,9 +71,9 @@ impl CodeGenerator {
         let mut puts_sig = self.module.make_signature();
         
         // Set the calling convention explicitly for the target platform
-        // Try SystemV instead of AppleAarch64 to see if it has better stack alignment
+        // Use AppleAarch64 for proper Apple Silicon support
         puts_sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            cranelift_codegen::isa::CallConv::SystemV  // Try SystemV instead of AppleAarch64
+            cranelift_codegen::isa::CallConv::AppleAarch64  // Use proper Apple ABI
         } else if cfg!(target_os = "linux") {
             cranelift_codegen::isa::CallConv::SystemV
         } else {
@@ -83,8 +83,15 @@ impl CodeGenerator {
         puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
         puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         
+        // On macOS, C functions require underscore prefix
+        let puts_name = if cfg!(target_os = "macos") {
+            "_puts"
+        } else {
+            "puts"
+        };
+        
         let puts_func_id = self.module
-            .declare_function("puts", Linkage::Import, &puts_sig)
+            .declare_function(puts_name, Linkage::Import, &puts_sig)
             .unwrap();
         self.printf_func = Some(puts_func_id); // Store but don't use
 
@@ -103,9 +110,9 @@ impl CodeGenerator {
         sig.params.clear();
         
         // Set the calling convention explicitly for the target platform
-        // Try SystemV instead of AppleAarch64 to see if it has better stack alignment
+        // Use AppleAarch64 for proper Apple Silicon support
         sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            cranelift_codegen::isa::CallConv::SystemV  // Try SystemV instead of AppleAarch64
+            cranelift_codegen::isa::CallConv::AppleAarch64  // Use proper Apple ABI
         } else if cfg!(target_os = "linux") {
             cranelift_codegen::isa::CallConv::SystemV
         } else {
@@ -264,7 +271,7 @@ impl CodeGenerator {
                             // First create a null pointer as before (unused but kept for reference)
                             let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
-                            // Try the actual function call with the real message to debug the bus error
+                            // Minimal function call - let Cranelift handle everything automatically
                             let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
                             let results = builder.inst_results(call_inst);
                             results[0]
