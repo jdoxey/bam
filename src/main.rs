@@ -425,8 +425,12 @@ fn main() {
     }
 
     // Link to create executable
-    let executable_name = &output_name;
-    match link_executable(&object_file, executable_name) {
+    let executable_name = if cfg!(target_os = "windows") {
+        format!("{}.exe", output_name)
+    } else {
+        output_name.clone()
+    };
+    match link_executable(&object_file, &executable_name) {
         Ok(_) => {
             println!("Generated executable: {}", executable_name);
             // Clean up object file (skip cleanup if KEEP_OBJECT_FILE env var is set)
