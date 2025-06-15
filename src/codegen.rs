@@ -22,7 +22,19 @@ impl CodeGenerator {
         let mut flag_builder = settings::builder();
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
         flag_builder.set("is_pic", "false").unwrap();
-        let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64").unwrap();
+        
+        // Detect the target architecture
+        let target_arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "aarch64"
+        } else {
+            panic!("Unsupported target architecture: {}", std::env::consts::ARCH);
+        };
+        
+        let isa_builder = cranelift_codegen::isa::lookup_by_name(target_arch)
+            .map_err(|e| format!("Failed to find ISA for {}: {}", target_arch, e))
+            .unwrap();
         let isa = isa_builder.finish(settings::Flags::new(flag_builder)).unwrap();
 
         // Create the object module

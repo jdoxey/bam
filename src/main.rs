@@ -212,24 +212,40 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
     // Use platform-specific linking arguments based on the host platform
     #[cfg(target_os = "linux")]
     {
+        let (lib_dir, linker_path) = if cfg!(target_arch = "x86_64") {
+            ("x86_64-linux-gnu", "/lib64/ld-linux-x86-64.so.2")
+        } else if cfg!(target_arch = "aarch64") {
+            ("aarch64-linux-gnu", "/lib/ld-linux-aarch64.so.1")
+        } else {
+            panic!("Unsupported Linux architecture: {}", std::env::consts::ARCH);
+        };
+        
         cmd.arg("-flavor")
             .arg("gnu")  // Use GNU ld-compatible interface
             .arg("-o")
             .arg(executable_name)
-            .arg("/usr/lib/x86_64-linux-gnu/crt1.o")  // C runtime startup
-            .arg("/usr/lib/x86_64-linux-gnu/crti.o")  // C runtime init
-            .arg(object_file)                         // Our object file
-            .arg("/usr/lib/x86_64-linux-gnu/crtn.o")  // C runtime finish
+            .arg(&format!("/usr/lib/{}/crt1.o", lib_dir))  // C runtime startup
+            .arg(&format!("/usr/lib/{}/crti.o", lib_dir))  // C runtime init
+            .arg(object_file)                              // Our object file
+            .arg(&format!("/usr/lib/{}/crtn.o", lib_dir))  // C runtime finish
             .arg("-lc")  // Link against libc
-            .arg("-L/usr/lib/x86_64-linux-gnu")  // Add library search path
-            .arg("-L/lib/x86_64-linux-gnu")      // Add another library search path
-            .arg("-L/lib64")                     // Add lib64 path
+            .arg(&format!("-L/usr/lib/{}", lib_dir))  // Add library search path
+            .arg(&format!("-L/lib/{}", lib_dir))      // Add another library search path
+            .arg("-L/lib64")                          // Add lib64 path
             .arg("-dynamic-linker")
-            .arg("/lib64/ld-linux-x86-64.so.2");  // Set dynamic linker path
+            .arg(linker_path);  // Set dynamic linker path
     }
     
     #[cfg(target_os = "macos")]
     {
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
+        };
+        
         cmd.arg("-flavor")
             .arg("darwin")  // Use Darwin (macOS) linker interface
             .arg("-o")
@@ -237,7 +253,7 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg(object_file)                    // Our object file
             .arg("-lSystem")                     // Link against libSystem (includes libc)
             .arg("-arch")
-            .arg("x86_64")                       // Target architecture
+            .arg(arch)                           // Target architecture
             .arg("-platform_version")
             .arg("macos")
             .arg("10.9")                         // Minimum macOS version
