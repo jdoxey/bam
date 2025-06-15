@@ -1,0 +1,416 @@
+name: Release Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release'
+        required: true
+        type: choice
+        options:
+          - 'rc'
+          - 'final'
+        default: 'rc'
+      version:
+        description: 'Version (e.g., 0.1.0 for RC or final release)'
+        required: true
+        default: '0.1.0'
+      rc_number:
+        description: 'RC number (only for RC builds, e.g., 1 for rc.1)'
+        required: false
+        default: '1'
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate-inputs:
+    name: Validate Release Inputs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('release/{0}', inputs.version) || github.ref }}
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Extract version from tag (remove 'v' prefix)
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "release_version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          else
+            # Manual workflow dispatch
+            if [[ "${{ github.event.inputs.release_type }}" == "rc" ]]; then
+              VERSION="${{ github.event.inputs.version }}-rc.${{ github.event.inputs.rc_number }}"
+              echo "release_version=${VERSION}" >> $GITHUB_OUTPUT
+              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            else
+              VERSION="${{ github.event.inputs.version }}"
+              echo "release_version=${VERSION}" >> $GITHUB_OUTPUT
+              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+          echo "Release version: ${VERSION}"
+
+      - name: Verify release branch exists
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          BRANCH="release/${{ github.event.inputs.version }}"
+          if ! git show-ref --verify --quiet refs/remotes/origin/$BRANCH; then
+            echo "❌ Release branch $BRANCH does not exist!"
+            echo "Please create the release branch first:"
+            echo "  git checkout develop"
+            echo "  git checkout -b $BRANCH"
+            echo "  git push origin $BRANCH"
+            exit 1
+          fi
+          echo "✅ Release branch $BRANCH exists"
+
+  build:
+    name: Build and Package (${{ matrix.target }})
+    needs: [validate-inputs]
+    if: always() && (needs.validate-inputs.result == 'success' || github.event_name == 'push')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            lld_name: ld.lld
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            lld_name: ld.lld
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            lld_name: ld.lld.exe
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('release/{0}', github.event.inputs.version) || github.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Get release version
+        id: release_version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="${{ needs.validate-inputs.outputs.release_version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Release version: ${VERSION}"
+
+      - name: Update version in Cargo.toml
+        shell: bash
+        run: |
+          # Temporarily update version for release build
+          sed -i.bak 's/^version = ".*"/version = "${{ steps.release_version.outputs.version }}"/' Cargo.toml
+
+      - name: Run tests
+        run: cargo test --target ${{ matrix.target }}
+
+      - name: Build bam
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Extract rust-lld for bundling
+        shell: bash
+        run: |
+          # Get the target lib directory
+          TARGET_LIBDIR=$(rustc --print target-libdir --target ${{ matrix.target }})
+          echo "Target lib dir: $TARGET_LIBDIR"
+          
+          # Find rust-lld in the toolchain
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            RUST_LLD_PATH="$TARGET_LIBDIR/../bin/rust-lld.exe"
+          else
+            RUST_LLD_PATH="$TARGET_LIBDIR/../bin/rust-lld"
+          fi
+          
+          echo "Looking for rust-lld at: $RUST_LLD_PATH"
+          
+          if [[ -f "$RUST_LLD_PATH" ]]; then
+            echo "Found rust-lld, copying to package"
+            mkdir -p package
+            cp "$RUST_LLD_PATH" "package/${{ matrix.lld_name }}"
+            
+            # Copy bam executable  
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              cp "target/${{ matrix.target }}/release/bam.exe" "package/"
+            else
+              cp "target/${{ matrix.target }}/release/bam" "package/"
+            fi
+            
+            echo "Package contents:"
+            ls -la package/
+          else
+            echo "Error: rust-lld not found at $RUST_LLD_PATH"
+            exit 1
+          fi
+
+      - name: Test compilation end-to-end
+        shell: bash
+        run: |
+          cd package
+          
+          # Create test program
+          echo 'print(message: "Hello from release build!")' > test.bam
+          
+          # Test compilation
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            ./bam.exe test.bam
+            ./test.exe
+          else
+            ./bam test.bam
+            ./test
+          fi
+
+      - name: Create package archive
+        shell: bash
+        run: |
+          cd package
+          
+          # Create platform-specific archive
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Create ZIP for Windows
+            7z a "../bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.zip" .
+          else
+            # Create tar.gz for Unix-like systems
+            tar -czf "../bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.tar.gz" .
+          fi
+          
+          cd ..
+          echo "Created package:"
+          ls -la bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.*
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}-${{ steps.release_version.outputs.version }}
+          path: |
+            bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.tar.gz
+            bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.zip
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Restore Cargo.toml
+        shell: bash
+        run: |
+          # Restore original Cargo.toml
+          mv Cargo.toml.bak Cargo.toml
+
+  release:
+    name: Create GitHub Release
+    needs: [validate-inputs, build]
+    runs-on: ubuntu-latest
+    if: always() && needs.build.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('release/{0}', github.event.inputs.version) || github.ref }}
+
+      - name: Get release details
+        id: release_details
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            IS_PRERELEASE=false
+          else
+            VERSION="${{ needs.validate-inputs.outputs.release_version }}"
+            IS_PRERELEASE="${{ needs.validate-inputs.outputs.is_prerelease }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+          
+          # Generate release type label
+          if [[ "$VERSION" == *"-rc."* ]]; then
+            echo "type_label=Release Candidate" >> $GITHUB_OUTPUT
+            echo "type_emoji=🧪" >> $GITHUB_OUTPUT
+          elif [[ "$IS_PRERELEASE" == "true" ]]; then
+            echo "type_label=Pre-release" >> $GITHUB_OUTPUT
+            echo "type_emoji=⚠️" >> $GITHUB_OUTPUT
+          else
+            echo "type_label=Stable Release" >> $GITHUB_OUTPUT
+            echo "type_emoji=🚀" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.release_details.outputs.version }}
+          release_name: ${{ steps.release_details.outputs.type_emoji }} bam ${{ steps.release_details.outputs.version }} (${{ steps.release_details.outputs.type_label }})
+          body: |
+            ## bam ${{ steps.release_details.outputs.version }} (${{ steps.release_details.outputs.type_label }})
+            
+            ${{ steps.release_details.outputs.is_prerelease == 'true' && '**⚠️ This is a pre-release version for testing purposes.**' || 'Stable release of the bam programming language compiler.' }}
+            
+            Standalone bam compiler with bundled LLD linker.
+            
+            ### Installation
+            
+            1. Download the appropriate package for your platform:
+               - **Linux**: `bam-${{ steps.release_details.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz`
+               - **macOS**: `bam-${{ steps.release_details.outputs.version }}-x86_64-apple-darwin.tar.gz`  
+               - **Windows**: `bam-${{ steps.release_details.outputs.version }}-x86_64-pc-windows-msvc.zip`
+            
+            2. Extract the package:
+               ```bash
+               # Linux/macOS
+               tar -xzf bam-${{ steps.release_details.outputs.version }}-*.tar.gz
+               
+               # Windows
+               # Extract the .zip file using Windows Explorer or:
+               # Expand-Archive bam-${{ steps.release_details.outputs.version }}-*.zip
+               ```
+            
+            3. Test the installation:
+               ```bash
+               # Create a simple hello world program
+               echo 'print(message: "Hello, World!")' > hello.bam
+               
+               # Compile and run
+               ./bam hello.bam
+               ./hello
+               ```
+            
+            ### What's Included
+            
+            - **`bam`** - The bam compiler
+            - **`ld.lld`** - Bundled LLD linker (no external dependencies needed)
+            
+            ### System Requirements
+            
+            - **No external dependencies required**
+            - Works on base OS installations (Linux, macOS, Windows)
+            - No need to install Rust, LLVM, or other development tools
+            
+            ${{ steps.release_details.outputs.is_prerelease == 'true' && '### Testing and Feedback
+
+            This is a pre-release build. Please:
+            - Test thoroughly before using in production
+            - Report any issues on [GitHub Issues](https://github.com/' || '### Support
+
+            For questions and issues, please visit [GitHub Issues](https://github.com/' }}${{ github.repository }}/issues)
+            ${{ steps.release_details.outputs.is_prerelease == 'true' && '- Provide feedback on new features and changes' || '' }}
+            
+            ### License
+            
+            This distribution includes LLD from the LLVM Project.
+            LLD is licensed under the Apache License 2.0 with LLVM Exceptions.
+            
+            ---
+            
+            **Build Info:**
+            - **Commit**: ${{ github.sha }}
+            - **Branch**: ${{ github.event_name == 'workflow_dispatch' && format('release/{0}', github.event.inputs.version) || github.ref_name }}
+            - **Build Date**: ${{ github.run_id }}
+          draft: false
+          prerelease: ${{ steps.release_details.outputs.is_prerelease == 'true' }}
+
+      - name: Upload release assets
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.release_details.outputs.version }}"
+          UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
+          
+          # Function to upload a file
+          upload_asset() {
+            local file_path="$1"
+            local asset_name="$2"
+            local content_type="$3"
+            
+            if [[ -f "$file_path" ]]; then
+              echo "Uploading $asset_name..."
+              curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: $content_type" \
+                --data-binary @"$file_path" \
+                "${UPLOAD_URL%\{*}?name=${asset_name}"
+              echo "✅ Uploaded $asset_name"
+            else
+              echo "❌ File not found: $file_path"
+            fi
+          }
+          
+          # Upload Linux package
+          upload_asset \
+            "./artifacts/release-x86_64-unknown-linux-gnu-${VERSION}/bam-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            "bam-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            "application/gzip"
+          
+          # Upload macOS package
+          upload_asset \
+            "./artifacts/release-x86_64-apple-darwin-${VERSION}/bam-${VERSION}-x86_64-apple-darwin.tar.gz" \
+            "bam-${VERSION}-x86_64-apple-darwin.tar.gz" \
+            "application/gzip"
+          
+          # Upload Windows package
+          upload_asset \
+            "./artifacts/release-x86_64-pc-windows-msvc-${VERSION}/bam-${VERSION}-x86_64-pc-windows-msvc.zip" \
+            "bam-${VERSION}-x86_64-pc-windows-msvc.zip" \
+            "application/zip"
+
+      - name: Release summary
+        shell: bash
+        run: |
+          VERSION="${{ steps.release_details.outputs.version }}"
+          TYPE_LABEL="${{ steps.release_details.outputs.type_label }}"
+          TYPE_EMOJI="${{ steps.release_details.outputs.type_emoji }}"
+          
+          echo "$TYPE_EMOJI bam $VERSION ($TYPE_LABEL) published successfully!"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${VERSION}"
+          
+          if [[ "${{ steps.release_details.outputs.is_prerelease }}" == "true" ]]; then
+            echo "📋 This is a pre-release - please test thoroughly before production use"
+          else
+            echo "🎉 This is a stable release ready for production use"
+          fi

@@ -111,19 +111,65 @@ fn compile_program(statements: &[Stmt]) -> Vec<u8> {
 }
 
 fn link_executable(object_file: &str, executable_name: &str) -> Result<(), String> {
-    // Get the bundled LLD linker (no fallbacks)
-    let lld_path = get_bundled_lld()?;
-    println!("Using bundled LLD: {}", lld_path.display());
+    // Hybrid approach: bundled LLD for production, rust-lld for development
+    let lld_path = get_lld_for_linking()?;
     link_with_lld(&lld_path, object_file, executable_name)
+}
+
+fn get_lld_for_linking() -> Result<PathBuf, String> {
+    // 1. Try bundled LLD first (for packaged installations)
+    match get_bundled_lld() {
+        Ok(lld_path) => {
+            println!("Using bundled LLD: {}", lld_path.display());
+            return Ok(lld_path);
+        }
+        Err(_) => {
+            // Continue to development fallback
+        }
+    }
+    
+    // 2. For development: try rust-lld from toolchain
+    #[cfg(debug_assertions)]
+    {
+        match get_rust_lld() {
+            Ok(lld_path) => {
+                println!("Development mode: Using rust-lld from toolchain: {}", lld_path.display());
+                return Ok(lld_path);
+            }
+            Err(_) => {
+                // Continue to error
+            }
+        }
+    }
+    
+    // 3. No LLD found - provide helpful error message
+    Err(format!(
+        "No LLD linker found.\n\
+        \n\
+        For development: Ensure Rust is properly installed via rustup.\n\
+        For distribution: Re-download the complete bam package from:\n\
+        https://github.com/jdoxey/bam/releases\n\
+        \n\
+        Searched for:\n\
+        - Bundled LLD at: {}\n\
+        - Rust toolchain LLD", 
+        get_bundled_lld_path().display()
+    ))
+}
+
+fn get_bundled_lld_path() -> PathBuf {
+    // Get expected path for bundled LLD (may not exist)
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            return exe_dir.join("ld.lld");
+        }
+    }
+    PathBuf::from("ld.lld") // fallback
 }
 
 fn get_bundled_lld() -> Result<PathBuf, String> {
     // Look for ld.lld in same directory as bam executable
-    let exe_path = env::current_exe()
-        .map_err(|e| format!("Cannot determine executable path: {}", e))?;
-    let exe_dir = exe_path.parent()
-        .ok_or("Cannot find executable directory")?;
-    let lld_path = exe_dir.join("ld.lld");
+    let lld_path = get_bundled_lld_path();
     
     if lld_path.exists() {
         Ok(lld_path)
@@ -135,6 +181,28 @@ fn get_bundled_lld() -> Result<PathBuf, String> {
             https://github.com/jdoxey/bam/releases",
             lld_path.display()
         ))
+    }
+}
+
+fn get_rust_lld() -> Result<PathBuf, String> {
+    // Try to find rust-lld from the current Rust toolchain
+    let output = process::Command::new("rustc")
+        .arg("--print")
+        .arg("target-libdir")
+        .output()
+        .map_err(|e| format!("Failed to run rustc: {}", e))?;
+
+    if !output.status.success() {
+        return Err("rustc command failed".to_string());
+    }
+
+    let target_libdir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let rust_lld = Path::new(&target_libdir).join("../bin/rust-lld");
+    
+    if rust_lld.exists() {
+        Ok(rust_lld)
+    } else {
+        Err(format!("rust-lld not found at: {}", rust_lld.display()))
     }
 }
 

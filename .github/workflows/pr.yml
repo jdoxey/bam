@@ -1,0 +1,183 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  alpha-build:
+    name: Alpha Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            lld_name: ld.lld
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            lld_name: ld.lld
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            lld_name: ld.lld.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Generate alpha version
+        id: version
+        shell: bash
+        run: |
+          # Get base version from Cargo.toml
+          BASE_VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          # Create alpha version with PR number and commit hash
+          ALPHA_VERSION="${BASE_VERSION}-alpha.${{ github.event.number }}.$(git rev-parse --short HEAD)"
+          echo "version=${ALPHA_VERSION}" >> $GITHUB_OUTPUT
+          echo "Alpha version: ${ALPHA_VERSION}"
+
+      - name: Update version in Cargo.toml
+        shell: bash
+        run: |
+          # Temporarily update version for alpha build
+          sed -i.bak 's/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' Cargo.toml
+
+      - name: Run tests
+        run: cargo test --target ${{ matrix.target }}
+
+      - name: Run clippy
+        run: cargo clippy --target ${{ matrix.target }} -- -D warnings
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Build bam
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Extract rust-lld for bundling
+        shell: bash
+        run: |
+          # Get the target lib directory
+          TARGET_LIBDIR=$(rustc --print target-libdir --target ${{ matrix.target }})
+          echo "Target lib dir: $TARGET_LIBDIR"
+          
+          # Find rust-lld in the toolchain
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            RUST_LLD_PATH="$TARGET_LIBDIR/../bin/rust-lld.exe"
+          else
+            RUST_LLD_PATH="$TARGET_LIBDIR/../bin/rust-lld"
+          fi
+          
+          echo "Looking for rust-lld at: $RUST_LLD_PATH"
+          
+          if [[ -f "$RUST_LLD_PATH" ]]; then
+            echo "Found rust-lld, copying to package"
+            mkdir -p package
+            cp "$RUST_LLD_PATH" "package/${{ matrix.lld_name }}"
+            
+            # Copy bam executable  
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              cp "target/${{ matrix.target }}/release/bam.exe" "package/"
+            else
+              cp "target/${{ matrix.target }}/release/bam" "package/"
+            fi
+            
+            echo "Package contents:"
+            ls -la package/
+          else
+            echo "Error: rust-lld not found at $RUST_LLD_PATH"
+            exit 1
+          fi
+
+      - name: Test compilation end-to-end
+        shell: bash
+        run: |
+          cd package
+          
+          # Create test program
+          echo 'print(message: "Hello from alpha build!")' > test.bam
+          
+          # Test compilation
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            ./bam.exe test.bam
+            ./test.exe
+          else
+            ./bam test.bam
+            ./test
+          fi
+
+      - name: Create alpha package
+        shell: bash
+        run: |
+          cd package
+          
+          # Create platform-specific archive
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Create ZIP for Windows
+            7z a "../bam-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" .
+          else
+            # Create tar.gz for Unix-like systems
+            tar -czf "../bam-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz" .
+          fi
+          
+          cd ..
+          echo "Created alpha package:"
+          ls -la bam-${{ steps.version.outputs.version }}-${{ matrix.target }}.*
+
+      - name: Upload alpha artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-${{ matrix.target }}-${{ steps.version.outputs.version }}
+          path: |
+            bam-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz
+            bam-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Restore Cargo.toml
+        shell: bash
+        run: |
+          # Restore original Cargo.toml
+          mv Cargo.toml.bak Cargo.toml
+
+  alpha-summary:
+    name: Alpha Build Summary
+    needs: alpha-build
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check alpha build status
+        shell: bash
+        run: |
+          if [[ "${{ needs.alpha-build.result }}" == "success" ]]; then
+            echo "✅ All alpha builds passed! PR is ready for review."
+          else
+            echo "❌ Alpha builds failed. Please fix the issues before merging."
+            exit 1
+          fi
