@@ -64,14 +64,14 @@ impl CodeGenerator {
         // Don't declare any external functions - test if the issue is external function calls
         self.printf_func = None; // No external functions
 
-        // Skip all string processing - test minimal program again
-        // let mut string_literals = Vec::new();
-        // self.collect_string_literals(statements, &mut string_literals);
-        // 
-        // // Create string data before main compilation
-        // for string_literal in &string_literals {
-        //     self.create_string_data(string_literal);
-        // }
+        // Add back string processing to test if global data causes issues
+        let mut string_literals = Vec::new();
+        self.collect_string_literals(statements, &mut string_literals);
+        
+        // Create string data before main compilation
+        for string_literal in &string_literals {
+            self.create_string_data(string_literal);
+        }
 
         // Create a main function  
         let mut sig = self.module.make_signature();
