@@ -57,11 +57,14 @@ jobs:
           # Get base version from Cargo.toml
           BASE_VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           
-          # Count commits on develop since last tag to generate beta number
-          BETA_COUNT=$(git rev-list --count HEAD ^$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~1000") 2>/dev/null || echo "1")
+          # Use git commit count from the beginning of develop branch for beta number
+          BETA_COUNT=$(git rev-list --count develop)
           
-          # Create beta version
-          BETA_VERSION="${BASE_VERSION}-beta.${BETA_COUNT}"
+          # Add short commit SHA for uniqueness
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          
+          # Create beta version with both count and SHA for uniqueness
+          BETA_VERSION="${BASE_VERSION}-beta.${BETA_COUNT}.${SHORT_SHA}"
           echo "version=${BETA_VERSION}" >> $GITHUB_OUTPUT
           echo "Beta version: ${BETA_VERSION}"
 
@@ -211,11 +214,14 @@ jobs:
           # Get base version from Cargo.toml
           BASE_VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
           
-          # Count commits on develop since last tag to generate beta number
-          BETA_COUNT=$(git rev-list --count HEAD ^$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~1000") 2>/dev/null || echo "1")
+          # Use git commit count from the beginning of develop branch for beta number
+          BETA_COUNT=$(git rev-list --count develop)
           
-          # Create beta version
-          BETA_VERSION="${BASE_VERSION}-beta.${BETA_COUNT}"
+          # Add short commit SHA for uniqueness
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          
+          # Create beta version with both count and SHA for uniqueness
+          BETA_VERSION="${BASE_VERSION}-beta.${BETA_COUNT}.${SHORT_SHA}"
           echo "version=${BETA_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Create beta release
