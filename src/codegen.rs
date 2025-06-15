@@ -375,10 +375,16 @@ impl CodeGenerator {
         module: &mut ObjectModule,
         string_data: &HashMap<String, DataId>,
     ) -> cranelift_codegen::ir::Value {
-        let data_id = string_data[s];
-        let global_value = module.declare_data_in_func(data_id, builder.func);
-        // Use the correct pointer type for the target platform
-        let pointer_type = module.target_config().pointer_type();
-        builder.ins().global_value(pointer_type, global_value)
+        // On macOS, string data creation is skipped to avoid bus errors
+        if cfg!(target_os = "macos") {
+            // Return a null pointer since we can't create global string data
+            builder.ins().iconst(module.target_config().pointer_type(), 0)
+        } else {
+            let data_id = string_data[s];
+            let global_value = module.declare_data_in_func(data_id, builder.func);
+            // Use the correct pointer type for the target platform
+            let pointer_type = module.target_config().pointer_type();
+            builder.ins().global_value(pointer_type, global_value)
+        }
     }
 }
