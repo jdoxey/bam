@@ -65,6 +65,9 @@ impl CodeGenerator {
         let mut printf_sig = self.module.make_signature();
         printf_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I64)); // char* format
         printf_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
+        
+        // Use the default calling convention which should work for all platforms
+        // printf_sig.call_conv is automatically set by make_signature() based on target
         let printf_func_id = self.module
             .declare_function("printf", Linkage::Import, &printf_sig)
             .unwrap();
@@ -83,6 +86,9 @@ impl CodeGenerator {
         let mut sig = self.module.make_signature();
         sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         sig.params.clear();
+        
+        // Use the default calling convention which should work for all platforms
+        // sig.call_conv is automatically set by make_signature() based on target
 
         // Cranelift handles platform-specific symbol naming automatically
         let main_func_id = self.module
@@ -285,6 +291,12 @@ impl CodeGenerator {
         let mut data_desc = cranelift_module::DataDescription::new();
         let mut string_bytes = s.as_bytes().to_vec();
         string_bytes.push(0); // null terminator
+        
+        // Add newline to the string for printf output
+        if !s.ends_with('\n') {
+            string_bytes.insert(string_bytes.len() - 1, b'\n');
+        }
+        
         data_desc.define(string_bytes.into_boxed_slice());
 
         let data_id = self.module
