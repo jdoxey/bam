@@ -227,17 +227,12 @@ impl CodeGenerator {
                     // Test function call mechanism with puts - this should cause the bus error
                     if let Some((param_name, expr)) = args.first() {
                         if param_name == "message" {
-                            // Get the string pointer and call puts
-                            let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
+                            // For debugging: compile the expression but don't call the function
+                            let _message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
                             
-                            let puts_func_ref = module.declare_func_in_func(
-                                printf_func, // This is puts_func_id
-                                builder.func
-                            );
-                            // This should cause the bus error on macOS
-                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
-                            let results = builder.inst_results(call_inst);
-                            results[0]
+                            // Skip the actual function call - just return 0
+                            // This tests if the issue is in expression compilation vs function calls
+                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
