@@ -21,7 +21,11 @@ impl CodeGenerator {
         // Create the ISA (Instruction Set Architecture) for the target
         let mut flag_builder = settings::builder();
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
-        flag_builder.set("is_pic", "false").unwrap();
+        
+        // Enable PIC (Position Independent Code) on macOS ARM64 to use GOT relocations
+        // This is required because macOS doesn't allow absolute addressing on ARM64
+        let use_pic = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+        flag_builder.set("is_pic", &use_pic.to_string()).unwrap();
         
         // Try to force frame pointer preservation on Apple ARM64 for better stack alignment
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -95,11 +99,10 @@ impl CodeGenerator {
         let mut string_literals = Vec::new();
         self.collect_string_literals(statements, &mut string_literals);
         
-        // Create string data before main compilation - skip on macOS to test if this causes bus error
-        if !cfg!(target_os = "macos") {
-            for string_literal in &string_literals {
-                self.create_string_data(string_literal);
-            }
+        // Create string data before main compilation
+        // Now using PIC mode on macOS to handle global data properly
+        for string_literal in &string_literals {
+            self.create_string_data(string_literal);
         }
 
         // Create a main function  
@@ -277,9 +280,12 @@ impl CodeGenerator {
                             
                             // Platform-specific print implementation
                             if cfg!(target_os = "macos") {
-                                // The issue is with string data access! Avoid it entirely.
-                                // Return exit code 73 (ASCII 'I') to indicate "I" for "It works!"
-                                builder.ins().iconst(cranelift_codegen::ir::types::I32, 73)
+                                // Test string access with PIC mode enabled
+                                // Extract first character and return as exit code
+                                let char_ptr = message_val;
+                                let first_char = builder.ins().load(cranelift_codegen::ir::types::I8, cranelift_codegen::ir::MemFlags::new(), char_ptr, 0);
+                                let first_char_i32 = builder.ins().uextend(cranelift_codegen::ir::types::I32, first_char);
+                                first_char_i32
                             } else {
                                 // On Linux and Windows, use standard C library function calls
                                 let puts_func_ref = module.declare_func_in_func(
@@ -375,16 +381,10 @@ impl CodeGenerator {
         module: &mut ObjectModule,
         string_data: &HashMap<String, DataId>,
     ) -> cranelift_codegen::ir::Value {
-        // On macOS, string data creation is skipped to avoid bus errors
-        if cfg!(target_os = "macos") {
-            // Return a null pointer since we can't create global string data
-            builder.ins().iconst(module.target_config().pointer_type(), 0)
-        } else {
-            let data_id = string_data[s];
-            let global_value = module.declare_data_in_func(data_id, builder.func);
-            // Use the correct pointer type for the target platform
-            let pointer_type = module.target_config().pointer_type();
-            builder.ins().global_value(pointer_type, global_value)
-        }
+        let data_id = string_data[s];
+        let global_value = module.declare_data_in_func(data_id, builder.func);
+        // Use the correct pointer type for the target platform
+        let pointer_type = module.target_config().pointer_type();
+        builder.ins().global_value(pointer_type, global_value)
     }
 }
