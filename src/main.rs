@@ -5,6 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 
+#[cfg(target_os = "macos")]
+use std::os::unix;
+
 mod codegen;
 
 #[derive(Debug)]
@@ -129,16 +132,13 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
     }
     
     // 2. For development: try rust-lld from toolchain
-    #[cfg(debug_assertions)]
-    {
-        match get_rust_lld() {
-            Ok(lld_path) => {
-                println!("Development mode: Using rust-lld from toolchain: {}", lld_path.display());
-                return Ok(lld_path);
-            }
-            Err(_) => {
-                // Continue to error
-            }
+    match get_rust_lld() {
+        Ok(lld_path) => {
+            println!("Development mode: Using rust-lld from toolchain: {}", lld_path.display());
+            return Ok(lld_path);
+        }
+        Err(_) => {
+            // Continue to error
         }
     }
     
@@ -207,11 +207,53 @@ fn get_rust_lld() -> Result<PathBuf, String> {
 }
 
 fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> Result<(), String> {
-    let mut cmd = process::Command::new(lld_path);
+    #[cfg(target_os = "macos")]  
+    {
+        // Use ld64.lld symlink approach for macOS (discovered to work in debugging)
+        let lld_dir = lld_path.parent().ok_or("Cannot get parent directory of LLD")?;
+        let ld64_path = lld_dir.join("ld64.lld");
+        
+        // Create ld64.lld symlink to rust-lld
+        if !ld64_path.exists() {
+            std::os::unix::fs::symlink(lld_path, &ld64_path)
+                .map_err(|e| format!("Failed to create ld64.lld symlink: {}", e))?;
+        }
+        
+        let mut cmd = process::Command::new(&ld64_path);
+        
+        // Architecture is mandatory for Darwin linker - use Apple's naming
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "arm64"  // Use Apple's standard ARM64 naming for Darwin
+        } else {
+            panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
+        };
+        
+        cmd.arg("-arch")
+            .arg(arch)
+            .arg("-platform_version")
+            .arg("macos")
+            .arg("11.0")     // Minimum macOS version
+            .arg("14.0")     // SDK version  
+            .arg("-o")
+            .arg(executable_name)
+            .arg(object_file)                    // Our object file
+            .arg("-lSystem");                    // Link against libSystem (includes libc)
+        
+        let output = cmd.output()
+            .map_err(|e| format!("Failed to execute ld64.lld: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("ld64.lld linking failed: {}", stderr));
+        }
+    }
     
-    // Use platform-specific linking arguments based on the host platform
     #[cfg(target_os = "linux")]
     {
+        let mut cmd = process::Command::new(lld_path);
+        
         let (lib_dir, linker_path) = if cfg!(target_arch = "x86_64") {
             ("x86_64-linux-gnu", "/lib64/ld-linux-x86-64.so.2")
         } else if cfg!(target_arch = "aarch64") {
@@ -234,35 +276,20 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("-L/lib64")                          // Add lib64 path
             .arg("-dynamic-linker")
             .arg(linker_path);  // Set dynamic linker path
-    }
-    
-    #[cfg(target_os = "macos")]
-    {
-        // Architecture is mandatory for darwin flavor - use Apple's naming
-        let arch = if cfg!(target_arch = "x86_64") {
-            "x86_64"
-        } else if cfg!(target_arch = "aarch64") {
-            "arm64"  // Use Apple's standard ARM64 naming for Darwin
-        } else {
-            panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
-        };
         
-        cmd.arg("-flavor")
-            .arg("darwin")
-            .arg("-arch")
-            .arg(arch)
-            .arg("-platform_version")
-            .arg("macos")
-            .arg("11.0")     // Minimum macOS version
-            .arg("14.0")     // SDK version  
-            .arg("-o")
-            .arg(executable_name)
-            .arg(object_file)                    // Our object file
-            .arg("-lSystem");                    // Link against libSystem (includes libc)
+        let output = cmd.output()
+            .map_err(|e| format!("Failed to execute LLD: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("LLD linking failed: {}", stderr));
+        }
     }
     
     #[cfg(target_os = "windows")]
     {
+        let mut cmd = process::Command::new(lld_path);
+        
         cmd.arg("-flavor")
             .arg("link")  // Use MSVC linker interface
             .arg(&format!("/out:{}", executable_name))
@@ -270,14 +297,14 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("/defaultlib:msvcrt")           // Link against MSVC runtime
             .arg("/defaultlib:kernel32")         // Link against kernel32
             .arg("/subsystem:console");          // Console application
-    }
-    
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute LLD: {}", e))?;
+        
+        let output = cmd.output()
+            .map_err(|e| format!("Failed to execute LLD: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("LLD linking failed: {}", stderr));
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("LLD linking failed: {}", stderr));
+        }
     }
 
     Ok(())

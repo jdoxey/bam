@@ -130,19 +130,16 @@ jobs:
           echo "=== Darwin flavor help ==="
           ./rust-lld -flavor darwin --help || true
           
-          echo "=== Test if ld64.lld exists ==="
-          ls -la ld64.lld 2>/dev/null || echo "ld64.lld not found"
-          
-          echo "=== Test different LLD invocation methods ==="
-          echo "Method 1: rust-lld with darwin flavor"
-          ./rust-lld -flavor darwin -arch arm64 --version 2>&1 | head -3 || true
-          
-          echo "Method 2: Check if rust-lld can be called as ld64.lld"
+          echo "=== Test ld64.lld symlink approach (our chosen method) ==="
           ln -sf rust-lld ld64.lld
+          echo "Created ld64.lld symlink to rust-lld"
+          ls -la ld64.lld
+          
+          echo "=== Test ld64.lld version ==="
           ./ld64.lld --version 2>&1 | head -3 || true
           
-          echo "Method 3: rust-lld with target triple"
-          ./rust-lld --target=aarch64-apple-darwin --version 2>&1 | head -3 || true
+          echo "=== Test ld64.lld with ARM64 architecture ==="
+          ./ld64.lld -arch arm64 -platform_version macos 11.0 14.0 --version 2>&1 | head -3 || true
 
       - name: Test compilation end-to-end
         shell: bash
