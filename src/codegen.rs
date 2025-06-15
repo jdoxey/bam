@@ -267,10 +267,9 @@ impl CodeGenerator {
                             // First create a null pointer as before (unused but kept for reference)
                             let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
-                            // Minimal function call - let Cranelift handle everything automatically
-                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
-                            let results = builder.inst_results(call_inst);
-                            results[0]
+                            // Temporarily skip the function call to isolate the issue
+                            // Just return success without calling puts to test if execution works
+                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
