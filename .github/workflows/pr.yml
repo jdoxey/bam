@@ -82,15 +82,15 @@ jobs:
       - name: Extract rust-lld for bundling
         shell: bash
         run: |
-          # Get the target lib directory
-          TARGET_LIBDIR=$(rustc --print target-libdir --target ${{ matrix.target }})
-          echo "Target lib dir: $TARGET_LIBDIR"
+          # Get the host toolchain directory (rust-lld is in host toolchain, not target-specific)
+          HOST_LIBDIR=$(rustc --print target-libdir)
+          echo "Host lib dir: $HOST_LIBDIR"
           
-          # Find rust-lld in the toolchain
+          # Find rust-lld in the host toolchain
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RUST_LLD_PATH="$TARGET_LIBDIR/../bin/rust-lld.exe"
+            RUST_LLD_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
           else
-            RUST_LLD_PATH="$TARGET_LIBDIR/../bin/rust-lld"
+            RUST_LLD_PATH="$HOST_LIBDIR/../bin/rust-lld"
           fi
           
           echo "Looking for rust-lld at: $RUST_LLD_PATH"
