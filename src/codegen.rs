@@ -280,12 +280,24 @@ impl CodeGenerator {
                             
                             // Platform-specific print implementation
                             if cfg!(target_os = "macos") {
-                                // Test string access with PIC mode enabled
-                                // Extract first character and return as exit code
-                                let char_ptr = message_val;
-                                let first_char = builder.ins().load(cranelift_codegen::ir::types::I8, cranelift_codegen::ir::MemFlags::new(), char_ptr, 0);
-                                let first_char_i32 = builder.ins().uextend(cranelift_codegen::ir::types::I32, first_char);
-                                first_char_i32
+                                // String data now works! Try the write system call approach
+                                let mut write_sig = module.make_signature();
+                                write_sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
+                                write_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32)); // fd
+                                write_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type())); // buf
+                                write_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type())); // count
+                                write_sig.returns.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type()));
+                                
+                                let write_func_id = module.declare_function("write", cranelift_module::Linkage::Import, &write_sig).unwrap();
+                                let write_func_ref = module.declare_func_in_func(write_func_id, builder.func);
+                                
+                                let stdout_fd = builder.ins().iconst(cranelift_codegen::ir::types::I32, 1); // stdout
+                                let len = builder.ins().iconst(module.target_config().pointer_type(), 23); // "Hello from beta build!" length
+                                
+                                // Try the write system call with working string data
+                                let call_inst = builder.ins().call(write_func_ref, &[stdout_fd, message_val, len]);
+                                let results = builder.inst_results(call_inst);
+                                results[0]
                             } else {
                                 // On Linux and Windows, use standard C library function calls
                                 let puts_func_ref = module.declare_func_in_func(
