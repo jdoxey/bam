@@ -235,7 +235,9 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("-platform_version")
             .arg("macos")
             .arg("11.0")     // Minimum macOS version
-            .arg("14.0")     // SDK version  
+            .arg("14.0")     // SDK version
+            .arg("-L/usr/lib")                   // Add standard library search path
+            .arg("-L/System/Library/Frameworks") // Add frameworks search path  
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file

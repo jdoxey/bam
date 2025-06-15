@@ -63,7 +63,7 @@ impl CodeGenerator {
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
         // Declare printf function with platform-specific name
         let printf_name = if cfg!(target_os = "macos") {
-            "_printf"  // macOS requires underscore prefix
+            "_printf"  // macOS requires underscore prefix for C functions
         } else {
             "printf"   // Linux and Windows use printf directly
         };
@@ -92,7 +92,7 @@ impl CodeGenerator {
 
         // Use platform-specific main function name
         let main_name = if cfg!(target_os = "macos") {
-            "_main"  // macOS requires underscore prefix
+            "_main"  // macOS requires underscore prefix for entry point
         } else {
             "main"   // Linux and Windows use main directly
         };
