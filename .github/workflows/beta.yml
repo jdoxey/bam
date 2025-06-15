@@ -75,8 +75,10 @@ jobs:
       - name: Run tests
         run: cargo test
 
-      - name: Build bam
-        run: cargo build --release
+      - name: Build bam with linker debugging
+        run: |
+          # Enable verbose linking to see how Rust calls rust-lld
+          RUSTFLAGS="-C link-arg=-v" cargo build --release -v
 
       - name: Extract rust-lld for bundling
         shell: bash
@@ -128,10 +130,19 @@ jobs:
           echo "=== Darwin flavor help ==="
           ./rust-lld -flavor darwin --help || true
           
-          echo "=== Test supported architectures ==="
-          ./rust-lld -flavor darwin -arch x86_64 --help 2>&1 | head -5 || true
-          ./rust-lld -flavor darwin -arch arm64 --help 2>&1 | head -5 || true
-          ./rust-lld -flavor darwin -arch aarch64 --help 2>&1 | head -5 || true
+          echo "=== Test if ld64.lld exists ==="
+          ls -la ld64.lld 2>/dev/null || echo "ld64.lld not found"
+          
+          echo "=== Test different LLD invocation methods ==="
+          echo "Method 1: rust-lld with darwin flavor"
+          ./rust-lld -flavor darwin -arch arm64 --version 2>&1 | head -3 || true
+          
+          echo "Method 2: Check if rust-lld can be called as ld64.lld"
+          ln -sf rust-lld ld64.lld
+          ./ld64.lld --version 2>&1 | head -3 || true
+          
+          echo "Method 3: rust-lld with target triple"
+          ./rust-lld --target=aarch64-apple-darwin --version 2>&1 | head -3 || true
 
       - name: Test compilation end-to-end
         shell: bash
