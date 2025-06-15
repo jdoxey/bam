@@ -208,25 +208,29 @@ impl CodeGenerator {
             }
             Expr::Call(func_name, args) => {
                 if func_name == "print" {
-                    // Extract the message parameter
-                    if let Some((param_name, expr)) = args.first() {
-                        if param_name == "message" {
-                            let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
-                            
-                            // Call puts with the message (simpler than printf)
-                            let puts_func_ref = module.declare_func_in_func(
-                                printf_func, // This is actually puts_func_id now
-                                builder.func
-                            );
-                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
-                            let results = builder.inst_results(call_inst);
-                            results[0]
-                        } else {
-                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
-                        }
-                    } else {
-                        builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
-                    }
+                    // For debugging: skip the actual function call, just return 0
+                    // This will help isolate if the issue is in function calls or string handling
+                    builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                    
+                    // TODO: Re-enable function call once we verify statement compilation works
+                    // if let Some((param_name, expr)) = args.first() {
+                    //     if param_name == "message" {
+                    //         let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
+                    //         
+                    //         // Call puts with the message (simpler than printf)
+                    //         let puts_func_ref = module.declare_func_in_func(
+                    //             printf_func, // This is actually puts_func_id now
+                    //             builder.func
+                    //         );
+                    //         let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
+                    //         let results = builder.inst_results(call_inst);
+                    //         results[0]
+                    //     } else {
+                    //         builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                    //     }
+                    // } else {
+                    //     builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                    // }
                 } else {
                     builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                 }
