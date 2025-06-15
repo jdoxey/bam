@@ -238,11 +238,11 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
     
     #[cfg(target_os = "macos")]
     {
-        // Architecture is mandatory for darwin flavor
+        // Architecture is mandatory for darwin flavor - use Apple's naming
         let arch = if cfg!(target_arch = "x86_64") {
             "x86_64"
         } else if cfg!(target_arch = "aarch64") {
-            "aarch64"  // Try aarch64 instead of arm64
+            "arm64"  // Use Apple's standard ARM64 naming for Darwin
         } else {
             panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
         };
