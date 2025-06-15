@@ -113,6 +113,20 @@ jobs:
             exit 1
           fi
 
+      - name: Debug LLD capabilities
+        shell: bash
+        run: |
+          cd package
+          
+          echo "=== LLD Help Output ==="
+          ./ld.lld --help || true
+          
+          echo "=== LLD Version ==="
+          ./ld.lld --version || true
+          
+          echo "=== Supported Architectures ==="
+          ./ld.lld -flavor darwin --help | grep -i arch || true
+
       - name: Test compilation end-to-end
         shell: bash
         run: |
