@@ -250,6 +250,10 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("darwin")  // Use Darwin (macOS) linker interface
             .arg("-arch")
             .arg(arch)       // Architecture is required on macOS
+            .arg("-platform_version")
+            .arg("macos")
+            .arg("11.0")     // Minimum macOS version (11.0 for ARM64 support)
+            .arg("14.0")     // SDK version
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file
