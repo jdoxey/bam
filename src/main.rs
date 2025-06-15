@@ -238,17 +238,9 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
     
     #[cfg(target_os = "macos")]
     {
-        // Use the same approach as rustc - specify target triple instead of flavor/arch
-        let target_triple = if cfg!(target_arch = "x86_64") {
-            "x86_64-apple-darwin"
-        } else if cfg!(target_arch = "aarch64") {
-            "aarch64-apple-darwin"
-        } else {
-            panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
-        };
-        
-        cmd.arg("--target")
-            .arg(target_triple)
+        // Try the most basic LLD darwin linking without problematic flags
+        cmd.arg("-flavor")
+            .arg("darwin")
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file
