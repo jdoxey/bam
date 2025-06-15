@@ -2,7 +2,7 @@ use cranelift_codegen::ir::{Function, UserFuncName, InstBuilder};
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::Context;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use cranelift_module::{Linkage, Module};
+use cranelift_module::{Linkage, Module, FuncId, DataId};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 
 use crate::{Stmt, Expr};
@@ -12,6 +12,8 @@ pub struct CodeGenerator {
     module: ObjectModule,
     ctx: Context,
     builder_ctx: FunctionBuilderContext,
+    printf_func: Option<FuncId>,
+    string_data: HashMap<String, DataId>,
 }
 
 impl CodeGenerator {
@@ -35,10 +37,30 @@ impl CodeGenerator {
             module,
             ctx: Context::new(),
             builder_ctx: FunctionBuilderContext::new(),
+            printf_func: None,
+            string_data: HashMap::new(),
         }
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
+        // Declare printf function
+        let mut printf_sig = self.module.make_signature();
+        printf_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I64)); // char* format
+        printf_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
+        let printf_func_id = self.module
+            .declare_function("printf", Linkage::Import, &printf_sig)
+            .unwrap();
+        self.printf_func = Some(printf_func_id);
+
+        // Pre-process strings before creating function builder
+        let mut string_literals = Vec::new();
+        self.collect_string_literals(statements, &mut string_literals);
+        
+        // Create string data before main compilation
+        for string_literal in &string_literals {
+            self.create_string_data(string_literal);
+        }
+
         // Create a main function  
         let mut sig = self.module.make_signature();
         sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
@@ -61,9 +83,15 @@ impl CodeGenerator {
         // For our tracer bullet, we'll implement very basic functionality
         let mut variables = HashMap::new();
 
-        for stmt in statements {
-            CodeGenerator::compile_statement_static(stmt, &mut builder, &mut variables);
-        }
+        // Compile statements using a separate method to avoid borrowing issues
+        CodeGenerator::compile_statements_static(
+            statements,
+            &mut builder,
+            &mut variables,
+            &mut self.module,
+            self.printf_func.unwrap(),
+            &self.string_data,
+        );
 
         // Return 0 (success)
         let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
@@ -81,14 +109,30 @@ impl CodeGenerator {
         object_product.emit().unwrap()
     }
 
+    fn compile_statements_static(
+        statements: &[Stmt],
+        builder: &mut FunctionBuilder,
+        variables: &mut HashMap<String, Variable>,
+        module: &mut ObjectModule,
+        printf_func: FuncId,
+        string_data: &HashMap<String, DataId>,
+    ) {
+        for stmt in statements {
+            CodeGenerator::compile_statement_static(stmt, builder, variables, module, printf_func, string_data);
+        }
+    }
+
     fn compile_statement_static(
         stmt: &Stmt,
         builder: &mut FunctionBuilder,
         variables: &mut HashMap<String, Variable>,
+        module: &mut ObjectModule,
+        printf_func: FuncId,
+        string_data: &HashMap<String, DataId>,
     ) {
         match stmt {
             Stmt::Assign(var_name, expr) => {
-                let value = CodeGenerator::compile_expression_static(expr, builder, variables);
+                let value = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
                 
                 // Create a new variable if it doesn't exist
                 if !variables.contains_key(var_name) {
@@ -102,7 +146,7 @@ impl CodeGenerator {
             }
             Stmt::Expr(expr) => {
                 // For now, just compile the expression (useful for function calls)
-                CodeGenerator::compile_expression_static(expr, builder, variables);
+                CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
             }
             Stmt::If(_, _) => {
                 // TODO: Implement if statements
@@ -115,6 +159,9 @@ impl CodeGenerator {
         expr: &Expr,
         builder: &mut FunctionBuilder,
         variables: &HashMap<String, Variable>,
+        module: &mut ObjectModule,
+        printf_func: FuncId,
+        string_data: &HashMap<String, DataId>,
     ) -> cranelift_codegen::ir::Value {
         match expr {
             Expr::Num(n) => {
@@ -129,20 +176,34 @@ impl CodeGenerator {
                 }
             }
             Expr::Add(left, right) => {
-                let left_val = CodeGenerator::compile_expression_static(left, builder, variables);
-                let right_val = CodeGenerator::compile_expression_static(right, builder, variables);
+                let left_val = CodeGenerator::compile_expression_static(left, builder, variables, module, printf_func, string_data);
+                let right_val = CodeGenerator::compile_expression_static(right, builder, variables, module, printf_func, string_data);
                 builder.ins().iadd(left_val, right_val)
             }
-            Expr::Str(_) => {
-                // For now, return a placeholder
-                // TODO: Implement string data section
-                builder.ins().iconst(cranelift_codegen::ir::types::I64, 0)
+            Expr::Str(s) => {
+                CodeGenerator::get_string_ptr_static(s, builder, module, string_data)
             }
-            Expr::Call(func_name, _args) => {
+            Expr::Call(func_name, args) => {
                 if func_name == "print" {
-                    // For our tracer bullet, we'll implement a simple print
-                    // TODO: Implement actual printf call
-                    builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                    // Extract the message parameter
+                    if let Some((param_name, expr)) = args.first() {
+                        if param_name == "message" {
+                            let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
+                            
+                            // Call printf with the message
+                            let printf_func_ref = module.declare_func_in_func(
+                                printf_func,
+                                builder.func
+                            );
+                            let call_inst = builder.ins().call(printf_func_ref, &[message_val]);
+                            let results = builder.inst_results(call_inst);
+                            results[0]
+                        } else {
+                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                        }
+                    } else {
+                        builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                    }
                 } else {
                     builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                 }
@@ -152,5 +213,76 @@ impl CodeGenerator {
                 builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
             }
         }
+    }
+
+    fn collect_string_literals(&self, statements: &[Stmt], strings: &mut Vec<String>) {
+        for stmt in statements {
+            self.collect_strings_from_stmt(stmt, strings);
+        }
+    }
+
+    fn collect_strings_from_stmt(&self, stmt: &Stmt, strings: &mut Vec<String>) {
+        match stmt {
+            Stmt::Assign(_, expr) => self.collect_strings_from_expr(expr, strings),
+            Stmt::Expr(expr) => self.collect_strings_from_expr(expr, strings),
+            Stmt::If(cond, body) => {
+                self.collect_strings_from_expr(cond, strings);
+                for stmt in body {
+                    self.collect_strings_from_stmt(stmt, strings);
+                }
+            }
+        }
+    }
+
+    fn collect_strings_from_expr(&self, expr: &Expr, strings: &mut Vec<String>) {
+        match expr {
+            Expr::Str(s) => {
+                if !strings.contains(s) {
+                    strings.push(s.clone());
+                }
+            }
+            Expr::Add(left, right) => {
+                self.collect_strings_from_expr(left, strings);
+                self.collect_strings_from_expr(right, strings);
+            }
+            Expr::Call(_, args) => {
+                for (_, expr) in args {
+                    self.collect_strings_from_expr(expr, strings);
+                }
+            }
+            Expr::Eq(left, right) => {
+                self.collect_strings_from_expr(left, strings);
+                self.collect_strings_from_expr(right, strings);
+            }
+            _ => {}
+        }
+    }
+
+    fn create_string_data(&mut self, s: &str) {
+        if self.string_data.contains_key(s) {
+            return;
+        }
+
+        let mut data_desc = cranelift_module::DataDescription::new();
+        let mut string_bytes = s.as_bytes().to_vec();
+        string_bytes.push(0); // null terminator
+        data_desc.define(string_bytes.into_boxed_slice());
+
+        let data_id = self.module
+            .declare_anonymous_data(false, false)
+            .unwrap();
+        self.module.define_data(data_id, &data_desc).unwrap();
+        self.string_data.insert(s.to_string(), data_id);
+    }
+
+    fn get_string_ptr_static(
+        s: &str,
+        builder: &mut FunctionBuilder,
+        module: &mut ObjectModule,
+        string_data: &HashMap<String, DataId>,
+    ) -> cranelift_codegen::ir::Value {
+        let data_id = string_data[s];
+        let global_value = module.declare_data_in_func(data_id, builder.func);
+        builder.ins().global_value(cranelift_codegen::ir::types::I64, global_value)
     }
 }
