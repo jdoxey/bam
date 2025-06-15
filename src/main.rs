@@ -111,7 +111,7 @@ fn compile_program(statements: &[Stmt]) -> Vec<u8> {
 }
 
 fn link_executable(object_file: &str, executable_name: &str) -> Result<(), String> {
-    // Hybrid approach: bundled LLD for production, rust-lld for development
+    // Use hybrid LLD approach for all platforms
     let lld_path = get_lld_for_linking()?;
     link_with_lld(&lld_path, object_file, executable_name)
 }
@@ -238,26 +238,13 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
     
     #[cfg(target_os = "macos")]
     {
-        let arch = if cfg!(target_arch = "x86_64") {
-            "x86_64"
-        } else if cfg!(target_arch = "aarch64") {
-            "arm64"
-        } else {
-            panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
-        };
-        
+        // Use a much simpler approach for macOS - let LLD figure out most details
         cmd.arg("-flavor")
             .arg("darwin")  // Use Darwin (macOS) linker interface
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file
-            .arg("-lSystem")                     // Link against libSystem (includes libc)
-            .arg("-arch")
-            .arg(arch)                           // Target architecture
-            .arg("-platform_version")
-            .arg("macos")
-            .arg("10.9")                         // Minimum macOS version
-            .arg("14.0");                        // Current SDK version
+            .arg("-lSystem");                    // Link against libSystem (includes libc)
     }
     
     #[cfg(target_os = "windows")]
@@ -281,6 +268,7 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
     Ok(())
 }
+
 
 
 fn main() {
