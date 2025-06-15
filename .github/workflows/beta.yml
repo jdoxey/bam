@@ -97,7 +97,8 @@ jobs:
           if [[ -f "$RUST_LLD_PATH" ]]; then
             echo "Found rust-lld, copying to package"
             mkdir -p package
-            cp "$RUST_LLD_PATH" "package/${{ matrix.lld_name }}"
+            # Keep the original name instead of renaming to ld.lld
+            cp "$RUST_LLD_PATH" "package/rust-lld"
             
             # Copy bam executable  
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
@@ -118,14 +119,14 @@ jobs:
         run: |
           cd package
           
-          echo "=== LLD Help Output ==="
-          ./ld.lld --help || true
+          echo "=== rust-lld Help Output ==="
+          ./rust-lld --help || true
           
-          echo "=== LLD Version ==="
-          ./ld.lld --version || true
+          echo "=== rust-lld Version ==="
+          ./rust-lld --version || true
           
-          echo "=== Supported Architectures ==="
-          ./ld.lld -flavor darwin --help | grep -i arch || true
+          echo "=== Darwin flavor help ==="
+          ./rust-lld -flavor darwin --help || true
 
       - name: Test compilation end-to-end
         shell: bash

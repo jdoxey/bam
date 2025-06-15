@@ -151,24 +151,24 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
         https://github.com/jdoxey/bam/releases\n\
         \n\
         Searched for:\n\
-        - Bundled LLD at: {}\n\
-        - Rust toolchain LLD", 
+        - Bundled rust-lld at: {}\n\
+        - Rust toolchain rust-lld", 
         get_bundled_lld_path().display()
     ))
 }
 
 fn get_bundled_lld_path() -> PathBuf {
-    // Get expected path for bundled LLD (may not exist)
+    // Get expected path for bundled rust-lld (may not exist)
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            return exe_dir.join("ld.lld");
+            return exe_dir.join("rust-lld");
         }
     }
-    PathBuf::from("ld.lld") // fallback
+    PathBuf::from("rust-lld") // fallback
 }
 
 fn get_bundled_lld() -> Result<PathBuf, String> {
-    // Look for ld.lld in same directory as bam executable
+    // Look for rust-lld in same directory as bam executable
     let lld_path = get_bundled_lld_path();
     
     if lld_path.exists() {
