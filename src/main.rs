@@ -1,6 +1,9 @@
 use lalrpop_util::lalrpop_mod;
 use std::collections::HashMap;
+use std::env;
 use std::fs;
+use std::path::Path;
+use std::process;
 
 mod codegen;
 
@@ -108,40 +111,74 @@ fn compile_program(statements: &[Stmt]) -> Vec<u8> {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    
+    if args.len() != 2 {
+        eprintln!("Usage: {} <filename.bam>", args[0]);
+        process::exit(1);
+    }
+    
+    let input_file = &args[1];
+    let input_path = Path::new(input_file);
+    
+    if !input_path.exists() {
+        eprintln!("Error: File '{}' not found", input_file);
+        process::exit(1);
+    }
+    
+    if !input_file.ends_with(".bam") {
+        eprintln!("Error: File must have .bam extension");
+        process::exit(1);
+    }
+    
+    // Read the input file
+    let source_code = match fs::read_to_string(input_file) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file '{}': {}", input_file, e);
+            process::exit(1);
+        }
+    };
+    
     let parser = grammar::StmtParser::new();
     
-    // Test program for compilation
-    let program = vec![
-        "x = 42",
-        "y = 10",
-    ];
-    
-    // Parse the statements
+    // Parse the statements line by line
     let mut statements = Vec::new();
-    for line in program {
+    for (line_num, line) in source_code.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        
         match parser.parse(line) {
             Ok(stmt) => statements.push(stmt),
             Err(e) => {
-                println!("Parse error in '{}': {:?}", line, e);
-                return;
+                eprintln!("Parse error on line {}: {:?}", line_num + 1, e);
+                process::exit(1);
             }
         }
     }
     
-    println!("Compiling program with {} statements...", statements.len());
+    if statements.is_empty() {
+        eprintln!("Error: No valid statements found in '{}'", input_file);
+        process::exit(1);
+    }
+    
+    println!("Compiling {} with {} statements...", input_file, statements.len());
     
     // Compile to object code
     let object_bytes = compile_program(&statements);
     
-    // Write object file
-    fs::write("output.o", &object_bytes).unwrap();
-    println!("Generated object file: output.o ({} bytes)", object_bytes.len());
+    // Generate output filename (replace .bam with .o)
+    let output_name = input_file.replace(".bam", "");
+    let object_file = format!("{}.o", output_name);
     
-    // For now, also run in interpreter mode for comparison
-    println!("\nRunning in interpreter mode:");
-    let mut env = HashMap::new();
-    for stmt in &statements {
-        eval_stmt(stmt, &mut env);
+    // Write object file
+    match fs::write(&object_file, &object_bytes) {
+        Ok(_) => println!("Generated object file: {} ({} bytes)", object_file, object_bytes.len()),
+        Err(e) => {
+            eprintln!("Error writing object file '{}': {}", object_file, e);
+            process::exit(1);
+        }
     }
-    println!("Variables: {:?}", env);
 }
