@@ -61,8 +61,15 @@ impl CodeGenerator {
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
-        // Don't declare any external functions - test if the issue is external function calls
-        self.printf_func = None; // No external functions
+        // Add back external function declaration (but don't call it) to test if declaration causes issues
+        let mut puts_sig = self.module.make_signature();
+        puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
+        puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
+        
+        let puts_func_id = self.module
+            .declare_function("puts", Linkage::Import, &puts_sig)
+            .unwrap();
+        self.printf_func = Some(puts_func_id); // Store but don't use
 
         // Add back string processing to test if global data causes issues
         let mut string_literals = Vec::new();
