@@ -140,6 +140,15 @@ jobs:
           
           echo "=== Test ld64.lld with ARM64 architecture ==="
           ./ld64.lld -arch arm64 -platform_version macos 11.0 14.0 --version 2>&1 | head -3 || true
+          
+          echo "=== Check macOS SDK locations ==="
+          ls -la /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/ 2>/dev/null || echo "Xcode SDK not found"
+          ls -la /Library/Developer/CommandLineTools/SDKs/ 2>/dev/null || echo "CommandLineTools SDK not found"
+          ls -la /usr/lib/ 2>/dev/null | head -5 || echo "/usr/lib not found"
+          
+          echo "=== Check for libSystem ==="
+          find /Library/Developer/CommandLineTools/SDKs -name "libSystem*" 2>/dev/null || echo "libSystem not found in CommandLineTools"
+          find /usr/lib -name "libSystem*" 2>/dev/null || echo "libSystem not found in /usr/lib"
 
       - name: Test compilation end-to-end
         shell: bash

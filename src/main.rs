@@ -230,14 +230,36 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
         };
         
+        // Try to find SDK path dynamically
+        let sdk_paths = [
+            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+            "/usr/lib", // Fallback to standard lib directory
+        ];
+        
+        let mut sdk_found = false;
+        for sdk_path in &sdk_paths {
+            if std::path::Path::new(sdk_path).exists() {
+                if sdk_path.ends_with(".sdk") {
+                    cmd.arg("-syslibroot").arg(sdk_path);
+                } else {
+                    cmd.arg("-L").arg(sdk_path);
+                }
+                sdk_found = true;
+                break;
+            }
+        }
+        
+        if !sdk_found {
+            return Err("No macOS SDK found. Please install Xcode Command Line Tools: xcode-select --install".to_string());
+        }
+        
         cmd.arg("-arch")
             .arg(arch)
             .arg("-platform_version")
             .arg("macos")
             .arg("11.0")     // Minimum macOS version
             .arg("14.0")     // SDK version
-            .arg("-L/usr/lib")                   // Add standard library search path
-            .arg("-L/System/Library/Frameworks") // Add frameworks search path  
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file
