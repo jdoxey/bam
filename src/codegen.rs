@@ -106,20 +106,19 @@ impl CodeGenerator {
         // Create a very simple main function
         let mut _variables: HashMap<String, Variable> = HashMap::new();
 
-        // For now, create a minimal program that just returns 0
-        // This will help isolate whether the crash is in our setup or statement compilation
+        // Re-enable statement compilation now that basic program works
+        CodeGenerator::compile_statements_static(
+            statements,
+            &mut builder,
+            &mut _variables,
+            &mut self.module,
+            self.printf_func.unwrap(),
+            &self.string_data,
+        );
+
+        // Return 0 (success)
         let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
         builder.ins().return_(&[zero]);
-        
-        // TODO: Re-enable statement compilation once we verify basic program works
-        // CodeGenerator::compile_statements_static(
-        //     statements,
-        //     &mut builder,
-        //     &mut variables,
-        //     &mut self.module,
-        //     self.printf_func.unwrap(),
-        //     &self.string_data,
-        // );
 
         // Finalize the function
         builder.finalize();
