@@ -71,14 +71,8 @@ impl CodeGenerator {
         let mut puts_sig = self.module.make_signature();
         
         // Set the calling convention explicitly for the target platform
-        // Use AppleAarch64 for proper Apple Silicon support
-        puts_sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            cranelift_codegen::isa::CallConv::AppleAarch64  // Use proper Apple ABI
-        } else if cfg!(target_os = "linux") {
-            cranelift_codegen::isa::CallConv::SystemV
-        } else {
-            cranelift_codegen::isa::CallConv::Fast // Default for other platforms
-        };
+        // Try SystemV for all platforms to see if it works better for C function calls
+        puts_sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
         
         puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
         puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
@@ -106,14 +100,8 @@ impl CodeGenerator {
         sig.params.clear();
         
         // Set the calling convention explicitly for the target platform
-        // Use AppleAarch64 for proper Apple Silicon support
-        sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            cranelift_codegen::isa::CallConv::AppleAarch64  // Use proper Apple ABI
-        } else if cfg!(target_os = "linux") {
-            cranelift_codegen::isa::CallConv::SystemV
-        } else {
-            cranelift_codegen::isa::CallConv::Fast // Default for other platforms
-        };
+        // Try SystemV for all platforms to see if it works better
+        sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
 
         // Cranelift handles platform-specific symbol naming automatically
         let main_func_id = self.module
@@ -267,27 +255,15 @@ impl CodeGenerator {
                             // First create a null pointer as before (unused but kept for reference)
                             let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
-                            // Try using SystemV calling convention instead of AppleAarch64
-                            // Sometimes the standard convention works better than platform-specific ones
-                            
-                            // Create a new function declaration with SystemV convention
-                            let mut simple_puts_sig = module.make_signature();
-                            simple_puts_sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
-                            simple_puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type()));
-                            simple_puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
-                            
-                            let simple_puts_func_id = module.declare_function("puts", cranelift_module::Linkage::Import, &simple_puts_sig).unwrap();
-                            
-                            let simple_puts_func_ref = module.declare_func_in_func(
-                                simple_puts_func_id,
+                            // Simple direct call using the original puts function (now with SystemV convention)
+                            let puts_func_ref = module.declare_func_in_func(
+                                printf_func,
                                 builder.func
                             );
                             
                             // Test with null pointer first to isolate parameter vs call issues
-                            // If this works, the issue is in parameter passing
-                            // If this fails, the issue is in the call instruction itself
                             let null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
-                            let call_inst = builder.ins().call(simple_puts_func_ref, &[null_ptr]);
+                            let call_inst = builder.ins().call(puts_func_ref, &[null_ptr]);
                             let results = builder.inst_results(call_inst);
                             results[0]
                         } else {
