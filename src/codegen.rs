@@ -23,17 +23,23 @@ impl CodeGenerator {
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
         flag_builder.set("is_pic", "false").unwrap();
         
-        // Detect the target architecture
-        let target_arch = if cfg!(target_arch = "x86_64") {
-            "x86_64"
-        } else if cfg!(target_arch = "aarch64") {
-            "aarch64"
+        // Detect the target triple for proper object format
+        let target_triple = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+            "aarch64-apple-darwin"
+        } else if cfg!(target_os = "macos") && cfg!(target_arch = "x86_64") {
+            "x86_64-apple-darwin"
+        } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
+            "x86_64-unknown-linux-gnu"
+        } else if cfg!(target_os = "linux") && cfg!(target_arch = "aarch64") {
+            "aarch64-unknown-linux-gnu"
+        } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
+            "x86_64-pc-windows-msvc"
         } else {
-            panic!("Unsupported target architecture: {}", std::env::consts::ARCH);
+            panic!("Unsupported target combination: {} {}", std::env::consts::OS, std::env::consts::ARCH);
         };
         
-        let isa_builder = cranelift_codegen::isa::lookup_by_name(target_arch)
-            .map_err(|e| format!("Failed to find ISA for {}: {}", target_arch, e))
+        let isa_builder = cranelift_codegen::isa::lookup(target_triple.parse().unwrap())
+            .map_err(|e| format!("Failed to find ISA for {}: {}", target_triple, e))
             .unwrap();
         let isa = isa_builder.finish(settings::Flags::new(flag_builder)).unwrap();
 

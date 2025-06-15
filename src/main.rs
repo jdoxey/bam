@@ -396,8 +396,10 @@ fn main() {
     match link_executable(&object_file, executable_name) {
         Ok(_) => {
             println!("Generated executable: {}", executable_name);
-            // Clean up object file
-            let _ = fs::remove_file(&object_file);
+            // Clean up object file (skip cleanup if KEEP_OBJECT_FILE env var is set)
+            if env::var("KEEP_OBJECT_FILE").is_err() {
+                let _ = fs::remove_file(&object_file);
+            }
         }
         Err(e) => {
             eprintln!("Error linking executable '{}': {}", executable_name, e);

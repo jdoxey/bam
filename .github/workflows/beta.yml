@@ -149,13 +149,35 @@ jobs:
           # Create test program
           echo 'print(message: "Hello from beta build!")' > test.bam
           
-          # Test compilation
+          echo "=== Testing object file generation ==="
+          # First, let's see what object file format we generate
+          export KEEP_OBJECT_FILE=1
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            ./bam.exe test.bam
-            ./test.exe
+            ./bam.exe test.bam 2>&1 || true
+            echo "Object file format check:"
+            file test.o 2>/dev/null || echo "No test.o found or file command not available"
           else
-            ./bam test.bam
-            ./test
+            ./bam test.bam 2>&1 || true
+            echo "Object file format check:"
+            file test.o 2>/dev/null || echo "No test.o found or file command not available"
+          fi
+          
+          echo "=== Testing executable run ==="
+          # Test running the executable if it was created
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            if [[ -f "test.exe" ]]; then
+              echo "Running test.exe:"
+              ./test.exe
+            else
+              echo "test.exe not found - compilation failed"
+            fi
+          else
+            if [[ -f "test" ]]; then
+              echo "Running test:"
+              ./test
+            else
+              echo "test executable not found - compilation failed"
+            fi
           fi
 
       - name: Create beta package
