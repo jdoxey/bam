@@ -161,10 +161,19 @@ fn get_bundled_lld_path() -> PathBuf {
     // Get expected path for bundled rust-lld (may not exist)
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            return exe_dir.join("rust-lld");
+            if cfg!(target_os = "windows") {
+                return exe_dir.join("rust-lld.exe");
+            } else {
+                return exe_dir.join("rust-lld");
+            }
         }
     }
-    PathBuf::from("rust-lld") // fallback
+    // fallback
+    if cfg!(target_os = "windows") {
+        PathBuf::from("rust-lld.exe")
+    } else {
+        PathBuf::from("rust-lld")
+    }
 }
 
 fn get_bundled_lld() -> Result<PathBuf, String> {
