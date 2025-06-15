@@ -61,24 +61,17 @@ impl CodeGenerator {
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
-        // Try declaring exit function instead - no parameters, simpler to test
-        let mut exit_sig = self.module.make_signature();
-        exit_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32)); // int status
-        // exit doesn't return, but we need to tell Cranelift something
-        
-        let exit_func_id = self.module
-            .declare_function("exit", Linkage::Import, &exit_sig)
-            .unwrap();
-        self.printf_func = Some(exit_func_id); // Reuse the same field for exit
+        // Don't declare any external functions - test if the issue is external function calls
+        self.printf_func = None; // No external functions
 
-        // Pre-process strings before creating function builder
-        let mut string_literals = Vec::new();
-        self.collect_string_literals(statements, &mut string_literals);
-        
-        // Create string data before main compilation
-        for string_literal in &string_literals {
-            self.create_string_data(string_literal);
-        }
+        // Skip all string processing - test minimal program again
+        // let mut string_literals = Vec::new();
+        // self.collect_string_literals(statements, &mut string_literals);
+        // 
+        // // Create string data before main compilation
+        // for string_literal in &string_literals {
+        //     self.create_string_data(string_literal);
+        // }
 
         // Create a main function  
         let mut sig = self.module.make_signature();
@@ -106,15 +99,15 @@ impl CodeGenerator {
         // Create a very simple main function
         let mut _variables: HashMap<String, Variable> = HashMap::new();
 
-        // Re-enable statement compilation now that basic program works
-        CodeGenerator::compile_statements_static(
-            statements,
-            &mut builder,
-            &mut _variables,
-            &mut self.module,
-            self.printf_func.unwrap(),
-            &self.string_data,
-        );
+        // Skip statement compilation entirely - test if issue is in our compilation logic
+        // CodeGenerator::compile_statements_static(
+        //     statements,
+        //     &mut builder,
+        //     &mut _variables,
+        //     &mut self.module,
+        //     self.printf_func.unwrap(),
+        //     &self.string_data,
+        // );
 
         // Return 0 (success)
         let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
