@@ -61,17 +61,15 @@ impl CodeGenerator {
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
-        // Declare printf function - Cranelift handles platform-specific naming
-        let mut printf_sig = self.module.make_signature();
-        printf_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I64)); // char* format
-        printf_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
+        // Declare puts function instead of printf (simpler, no format string issues)
+        let mut puts_sig = self.module.make_signature();
+        puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I64)); // char* string
+        puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         
-        // Use the default calling convention which should work for all platforms
-        // printf_sig.call_conv is automatically set by make_signature() based on target
-        let printf_func_id = self.module
-            .declare_function("printf", Linkage::Import, &printf_sig)
+        let puts_func_id = self.module
+            .declare_function("puts", Linkage::Import, &puts_sig)
             .unwrap();
-        self.printf_func = Some(printf_func_id);
+        self.printf_func = Some(puts_func_id); // Reuse the same field for puts
 
         // Pre-process strings before creating function builder
         let mut string_literals = Vec::new();
@@ -105,22 +103,23 @@ impl CodeGenerator {
         builder.switch_to_block(entry_block);
         builder.seal_block(entry_block);
 
-        // For our tracer bullet, we'll implement very basic functionality
-        let mut variables = HashMap::new();
+        // Create a very simple main function
+        let mut _variables: HashMap<String, Variable> = HashMap::new();
 
-        // Compile statements using a separate method to avoid borrowing issues
-        CodeGenerator::compile_statements_static(
-            statements,
-            &mut builder,
-            &mut variables,
-            &mut self.module,
-            self.printf_func.unwrap(),
-            &self.string_data,
-        );
-
-        // Return 0 (success)
+        // For now, create a minimal program that just returns 0
+        // This will help isolate whether the crash is in our setup or statement compilation
         let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
         builder.ins().return_(&[zero]);
+        
+        // TODO: Re-enable statement compilation once we verify basic program works
+        // CodeGenerator::compile_statements_static(
+        //     statements,
+        //     &mut builder,
+        //     &mut variables,
+        //     &mut self.module,
+        //     self.printf_func.unwrap(),
+        //     &self.string_data,
+        // );
 
         // Finalize the function
         builder.finalize();
@@ -215,12 +214,12 @@ impl CodeGenerator {
                         if param_name == "message" {
                             let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
                             
-                            // Call printf with the message
-                            let printf_func_ref = module.declare_func_in_func(
-                                printf_func,
+                            // Call puts with the message (simpler than printf)
+                            let puts_func_ref = module.declare_func_in_func(
+                                printf_func, // This is actually puts_func_id now
                                 builder.func
                             );
-                            let call_inst = builder.ins().call(printf_func_ref, &[message_val]);
+                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
                             let results = builder.inst_results(call_inst);
                             results[0]
                         } else {
@@ -290,12 +289,7 @@ impl CodeGenerator {
 
         let mut data_desc = cranelift_module::DataDescription::new();
         let mut string_bytes = s.as_bytes().to_vec();
-        string_bytes.push(0); // null terminator
-        
-        // Add newline to the string for printf output
-        if !s.ends_with('\n') {
-            string_bytes.insert(string_bytes.len() - 1, b'\n');
-        }
+        string_bytes.push(0); // null terminator (puts handles newline automatically)
         
         data_desc.define(string_bytes.into_boxed_slice());
 
