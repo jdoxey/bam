@@ -246,7 +246,14 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("ld64.lld linking failed: {}", stderr));
+            return Err(format!(
+                "ld64.lld linking failed: {}\n\n\
+                On macOS, bam requires Xcode Command Line Tools to be installed.\n\
+                Install them with: xcode-select --install\n\
+                \n\
+                Alternatively, you can install LLVM via Homebrew: brew install llvm", 
+                stderr
+            ));
         }
     }
     

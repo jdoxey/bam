@@ -55,12 +55,18 @@ impl CodeGenerator {
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
-        // Declare printf function
+        // Declare printf function with platform-specific name
+        let printf_name = if cfg!(target_os = "macos") {
+            "_printf"  // macOS requires underscore prefix
+        } else {
+            "printf"   // Linux and Windows use printf directly
+        };
+        
         let mut printf_sig = self.module.make_signature();
         printf_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I64)); // char* format
         printf_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         let printf_func_id = self.module
-            .declare_function("printf", Linkage::Import, &printf_sig)
+            .declare_function(printf_name, Linkage::Import, &printf_sig)
             .unwrap();
         self.printf_func = Some(printf_func_id);
 
@@ -78,8 +84,15 @@ impl CodeGenerator {
         sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         sig.params.clear();
 
+        // Use platform-specific main function name
+        let main_name = if cfg!(target_os = "macos") {
+            "_main"  // macOS requires underscore prefix
+        } else {
+            "main"   // Linux and Windows use main directly
+        };
+        
         let main_func_id = self.module
-            .declare_function("main", Linkage::Export, &sig)
+            .declare_function(main_name, Linkage::Export, &sig)
             .unwrap();
 
         // Build the function
