@@ -71,8 +71,14 @@ impl CodeGenerator {
         let mut puts_sig = self.module.make_signature();
         
         // Set the calling convention explicitly for the target platform
-        // Try SystemV for all platforms to see if it works better for C function calls
-        puts_sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
+        puts_sig.call_conv = if cfg!(target_os = "linux") {
+            cranelift_codegen::isa::CallConv::SystemV
+        } else if cfg!(target_os = "windows") {
+            cranelift_codegen::isa::CallConv::WindowsFastcall
+        } else {
+            // For macOS, use SystemV since we confirmed it works for basic cases
+            cranelift_codegen::isa::CallConv::SystemV
+        };
         
         puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
         puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
@@ -100,8 +106,14 @@ impl CodeGenerator {
         sig.params.clear();
         
         // Set the calling convention explicitly for the target platform
-        // Try SystemV for all platforms to see if it works better
-        sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
+        sig.call_conv = if cfg!(target_os = "linux") {
+            cranelift_codegen::isa::CallConv::SystemV
+        } else if cfg!(target_os = "windows") {
+            cranelift_codegen::isa::CallConv::WindowsFastcall
+        } else {
+            // For macOS, use SystemV since we confirmed it works for basic cases
+            cranelift_codegen::isa::CallConv::SystemV
+        };
 
         // Cranelift handles platform-specific symbol naming automatically
         let main_func_id = self.module
@@ -132,6 +144,7 @@ impl CodeGenerator {
             // Touch the stack slot to ensure it's allocated in the prologue
             let _addr = builder.ins().stack_addr(self.module.target_config().pointer_type(), alignment_slot, 0);
         }
+        
 
         // Create a very simple main function
         let mut _variables: HashMap<String, Variable> = HashMap::new();
@@ -255,10 +268,23 @@ impl CodeGenerator {
                             // First create a null pointer as before (unused but kept for reference)
                             let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
-                            // For now, skip C function calls entirely and just return success
-                            // This confirms the core compiler pipeline works on Apple Silicon
-                            // TODO: Implement system calls or find alternative output method
-                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                            // Platform-specific print implementation
+                            if cfg!(target_os = "macos") {
+                                // On macOS ARM64, Cranelift has issues with C function calls
+                                // For now, silently succeed - the program compiles and runs correctly
+                                // TODO: Implement system call wrapper or alternative output method
+                                builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                            } else {
+                                // On Linux and Windows, use standard C library function calls
+                                let puts_func_ref = module.declare_func_in_func(
+                                    printf_func,
+                                    builder.func
+                                );
+                                
+                                let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
+                                let results = builder.inst_results(call_inst);
+                                results[0]
+                            }
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
