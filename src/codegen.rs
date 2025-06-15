@@ -267,33 +267,24 @@ impl CodeGenerator {
                             // First create a null pointer as before (unused but kept for reference)
                             let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
-                            // Try a more explicit approach to function calling on Apple Silicon
-                            // Research showed Apple's ARM64 ABI has specific requirements
+                            // Try using SystemV calling convention instead of AppleAarch64
+                            // Sometimes the standard convention works better than platform-specific ones
                             
-                            // Ensure the string parameter is properly prepared
-                            let string_ptr = message_val;
+                            // Create a new function declaration with SystemV convention
+                            let mut simple_puts_sig = module.make_signature();
+                            simple_puts_sig.call_conv = cranelift_codegen::isa::CallConv::SystemV;
+                            simple_puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type()));
+                            simple_puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
                             
-                            // Try using call_indirect instead of direct call for better control
-                            // First get the function reference 
-                            let puts_func_ref = module.declare_func_in_func(
-                                printf_func,
+                            let simple_puts_func_id = module.declare_function("puts", cranelift_module::Linkage::Import, &simple_puts_sig).unwrap();
+                            
+                            let simple_puts_func_ref = module.declare_func_in_func(
+                                simple_puts_func_id,
                                 builder.func
                             );
                             
-                            // Create a function pointer from the reference
-                            let func_addr = builder.ins().func_addr(module.target_config().pointer_type(), puts_func_ref);
-                            
-                            // Create signature for indirect call
-                            let mut call_sig = module.make_signature();
-                            call_sig.call_conv = cranelift_codegen::isa::CallConv::AppleAarch64;
-                            call_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type()));
-                            call_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
-                            
-                            // Import the signature to get a SigRef
-                            let sig_ref = builder.func.import_signature(call_sig);
-                            
-                            // Make the indirect call with signature reference
-                            let call_inst = builder.ins().call_indirect(sig_ref, func_addr, &[string_ptr]);
+                            // Simple direct call with SystemV convention
+                            let call_inst = builder.ins().call(simple_puts_func_ref, &[message_val]);
                             let results = builder.inst_results(call_inst);
                             results[0]
                         } else {
