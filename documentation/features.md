@@ -1,4 +1,6 @@
 - cross platform, Windows/macOS/Linux
+  - ✅ Full support: Linux (x86_64), Windows (x86_64)
+  - ✅ Basic support: macOS (Apple Silicon ARM64) - compilation and execution work, print() function limited due to Cranelift C function call limitations
 - named parameters, but very basic, not complicated like Swift
     - e.g. only `someFunction(param1: "value1", param2: "value2")`, no anonymous parameters or separate internal and external names
 - no templated types
