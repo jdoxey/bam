@@ -289,8 +289,11 @@ impl CodeGenerator {
                             call_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type()));
                             call_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
                             
-                            // Make the indirect call with explicit signature control
-                            let call_inst = builder.ins().call_indirect(call_sig, func_addr, &[string_ptr]);
+                            // Import the signature to get a SigRef
+                            let sig_ref = builder.func.import_signature(call_sig);
+                            
+                            // Make the indirect call with signature reference
+                            let call_inst = builder.ins().call_indirect(sig_ref, func_addr, &[string_ptr]);
                             let results = builder.inst_results(call_inst);
                             results[0]
                         } else {
