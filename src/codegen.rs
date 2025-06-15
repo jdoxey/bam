@@ -131,10 +131,11 @@ impl CodeGenerator {
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         {
             // Create a 16-byte aligned stack slot to force proper stack frame setup
+            // align_shift is log2 of alignment, so 4 = log2(16) for 16-byte alignment
             let alignment_slot = builder.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
                 cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
                 16,
-                Some(16), // Force 16-byte alignment
+                4, // log2(16) = 4 for 16-byte alignment
             ));
             
             // Touch the stack slot to ensure it's allocated in the prologue
@@ -260,8 +261,8 @@ impl CodeGenerator {
                             // Try a different approach: test if we can call without parameters first
                             // This might reveal if the issue is in parameter handling vs call instruction
                             
-                            // First create a null pointer as before
-                            let null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
+                            // First create a null pointer as before (unused but kept for reference)
+                            let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
                             // Try the actual function call with the real message to debug the bus error
                             let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
