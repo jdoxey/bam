@@ -61,16 +61,15 @@ impl CodeGenerator {
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
-        // Declare puts function with correct signature for macOS ARM64
-        let mut puts_sig = self.module.make_signature();
-        // Use pointer type instead of I64 for better platform compatibility
-        puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
-        puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
+        // Try declaring exit function instead - no parameters, simpler to test
+        let mut exit_sig = self.module.make_signature();
+        exit_sig.params.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32)); // int status
+        // exit doesn't return, but we need to tell Cranelift something
         
-        let puts_func_id = self.module
-            .declare_function("puts", Linkage::Import, &puts_sig)
+        let exit_func_id = self.module
+            .declare_function("exit", Linkage::Import, &exit_sig)
             .unwrap();
-        self.printf_func = Some(puts_func_id); // Reuse the same field for puts
+        self.printf_func = Some(exit_func_id); // Reuse the same field for exit
 
         // Pre-process strings before creating function builder
         let mut string_literals = Vec::new();
@@ -209,19 +208,21 @@ impl CodeGenerator {
             }
             Expr::Call(func_name, args) => {
                 if func_name == "print" {
-                    // Re-enable function call with proper pointer handling
-                    if let Some((param_name, expr)) = args.first() {
+                    // Test function call mechanism with exit(0) - simpler than strings
+                    if let Some((param_name, _expr)) = args.first() {
                         if param_name == "message" {
-                            let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
+                            // Call exit(0) instead of puts to test function call mechanism
+                            let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
                             
-                            // Call puts with the message using proper pointer type
-                            let puts_func_ref = module.declare_func_in_func(
-                                printf_func, // This is actually puts_func_id now
+                            let exit_func_ref = module.declare_func_in_func(
+                                printf_func, // This is actually exit_func_id now
                                 builder.func
                             );
-                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
-                            let results = builder.inst_results(call_inst);
-                            results[0]
+                            // This should exit the program immediately if the function call works
+                            let _call_inst = builder.ins().call(exit_func_ref, &[zero]);
+                            
+                            // This shouldn't be reached if exit() works
+                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
