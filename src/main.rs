@@ -251,6 +251,10 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("darwin")
             .arg("-arch")
             .arg(arch)
+            .arg("-platform_version")
+            .arg("macos")
+            .arg("11.0")     // Minimum macOS version
+            .arg("14.0")     // SDK version  
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file

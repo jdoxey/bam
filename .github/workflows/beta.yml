@@ -127,6 +127,11 @@ jobs:
           
           echo "=== Darwin flavor help ==="
           ./rust-lld -flavor darwin --help || true
+          
+          echo "=== Test supported architectures ==="
+          ./rust-lld -flavor darwin -arch x86_64 --help 2>&1 | head -5 || true
+          ./rust-lld -flavor darwin -arch arm64 --help 2>&1 | head -5 || true
+          ./rust-lld -flavor darwin -arch aarch64 --help 2>&1 | head -5 || true
 
       - name: Test compilation end-to-end
         shell: bash
