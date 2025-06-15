@@ -275,10 +275,12 @@ impl CodeGenerator {
                             
                             // Platform-specific print implementation
                             if cfg!(target_os = "macos") {
-                                // On macOS ARM64, Cranelift has fundamental issues with both function calls AND memory loads
-                                // For now, return a special exit code to indicate print() was called
-                                // Exit code 42 means "print function was called successfully"
-                                builder.ins().iconst(cranelift_codegen::ir::types::I32, 42)
+                                // Test string pointer access without dereferencing
+                                // Convert the string pointer to an integer and return lower bits
+                                let ptr_as_int = builder.ins().ireduce(cranelift_codegen::ir::types::I32, message_val);
+                                // Return the lower 8 bits + 64 to make it visible (should be non-zero)
+                                let masked = builder.ins().band_imm(ptr_as_int, 0xFF);
+                                builder.ins().iadd_imm(masked, 64)
                             } else {
                                 // On Linux and Windows, use standard C library function calls
                                 let puts_func_ref = module.declare_func_in_func(
