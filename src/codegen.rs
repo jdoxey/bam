@@ -306,9 +306,9 @@ impl CodeGenerator {
                                     builder.func
                                 );
                                 
-                                let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
-                                let results = builder.inst_results(call_inst);
-                                results[0]
+                                let _call_inst = builder.ins().call(puts_func_ref, &[message_val]);
+                                // Return 0 for success instead of puts() result
+                                builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                             }
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
