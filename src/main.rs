@@ -134,7 +134,7 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
     // 2. For development: try rust-lld from toolchain
     match get_rust_lld() {
         Ok(lld_path) => {
-            println!("Development mode: Using rust-lld from toolchain: {}", lld_path.display());
+            println!("Using rust-lld from toolchain: {}", lld_path.display());
             return Ok(lld_path);
         }
         Err(_) => {

@@ -77,7 +77,7 @@ jobs:
       - name: Build bam
         run: cargo build --release
 
-      - name: Extract rust-lld for bundling
+      - name: Create package with rust-lld symlink
         shell: bash
         run: |
           # Get the host toolchain directory (rust-lld is in host toolchain, not target-specific)
@@ -94,10 +94,18 @@ jobs:
           echo "Looking for rust-lld at: $RUST_LLD_PATH"
           
           if [[ -f "$RUST_LLD_PATH" ]]; then
-            echo "Found rust-lld, copying to package"
+            echo "Found rust-lld, creating symlink in package"
             mkdir -p package
-            # Keep the original name instead of renaming to ld.lld
-            cp "$RUST_LLD_PATH" "package/rust-lld"
+            
+            # Create symlink to toolchain rust-lld instead of copying
+            # This ensures we use the version with proper shared library dependencies
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              # Windows doesn't support symlinks in the same way, so copy for now
+              cp "$RUST_LLD_PATH" "package/rust-lld.exe"
+            else
+              # Create symlink to system rust-lld
+              ln -sf "$RUST_LLD_PATH" "package/rust-lld"
+            fi
             
             # Copy bam executable  
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
