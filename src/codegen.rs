@@ -61,8 +61,18 @@ impl CodeGenerator {
     }
 
     pub fn compile_program(mut self, statements: &[Stmt]) -> Vec<u8> {
-        // Add back external function declaration (but don't call it) to test if declaration causes issues
+        // Declare puts function with explicit calling convention for macOS ARM64
         let mut puts_sig = self.module.make_signature();
+        
+        // Set the calling convention explicitly for the target platform
+        puts_sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            cranelift_codegen::isa::CallConv::AppleAarch64
+        } else if cfg!(target_os = "linux") {
+            cranelift_codegen::isa::CallConv::SystemV
+        } else {
+            cranelift_codegen::isa::CallConv::Fast // Default for other platforms
+        };
+        
         puts_sig.params.push(cranelift_codegen::ir::AbiParam::new(self.module.target_config().pointer_type())); // char* string
         puts_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         
@@ -85,8 +95,14 @@ impl CodeGenerator {
         sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
         sig.params.clear();
         
-        // Use the default calling convention which should work for all platforms
-        // sig.call_conv is automatically set by make_signature() based on target
+        // Set the calling convention explicitly for the target platform
+        sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            cranelift_codegen::isa::CallConv::AppleAarch64
+        } else if cfg!(target_os = "linux") {
+            cranelift_codegen::isa::CallConv::SystemV
+        } else {
+            cranelift_codegen::isa::CallConv::Fast // Default for other platforms
+        };
 
         // Cranelift handles platform-specific symbol naming automatically
         let main_func_id = self.module
