@@ -297,7 +297,9 @@ impl CodeGenerator {
                                 // Try the write system call with working string data
                                 let call_inst = builder.ins().call(write_func_ref, &[stdout_fd, message_val, len]);
                                 let results = builder.inst_results(call_inst);
-                                results[0]
+                                // Convert the i64 result to i32 for our function signature
+                                let bytes_written = results[0];
+                                builder.ins().ireduce(cranelift_codegen::ir::types::I32, bytes_written)
                             } else {
                                 // On Linux and Windows, use standard C library function calls
                                 let puts_func_ref = module.declare_func_in_func(
