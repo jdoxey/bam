@@ -238,9 +238,19 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
     
     #[cfg(target_os = "macos")]
     {
-        // Try the most basic LLD darwin linking without problematic flags
+        // Architecture is mandatory for darwin flavor
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "aarch64"  // Try aarch64 instead of arm64
+        } else {
+            panic!("Unsupported macOS architecture: {}", std::env::consts::ARCH);
+        };
+        
         cmd.arg("-flavor")
             .arg("darwin")
+            .arg("-arch")
+            .arg(arch)
             .arg("-o")
             .arg(executable_name)
             .arg(object_file)                    // Our object file
