@@ -2,7 +2,7 @@ use lalrpop_util::lalrpop_mod;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 
 mod codegen;
@@ -110,6 +110,63 @@ fn compile_program(statements: &[Stmt]) -> Vec<u8> {
     codegen.compile_program(statements)
 }
 
+fn link_executable(object_file: &str, executable_name: &str) -> Result<(), String> {
+    // Get the bundled LLD linker (no fallbacks)
+    let lld_path = get_bundled_lld()?;
+    println!("Using bundled LLD: {}", lld_path.display());
+    link_with_lld(&lld_path, object_file, executable_name)
+}
+
+fn get_bundled_lld() -> Result<PathBuf, String> {
+    // Look for ld.lld in same directory as bam executable
+    let exe_path = env::current_exe()
+        .map_err(|e| format!("Cannot determine executable path: {}", e))?;
+    let exe_dir = exe_path.parent()
+        .ok_or("Cannot find executable directory")?;
+    let lld_path = exe_dir.join("ld.lld");
+    
+    if lld_path.exists() {
+        Ok(lld_path)
+    } else {
+        Err(format!(
+            "Bundled LLD linker not found at: {}\n\
+            This indicates a corrupted or incomplete bam installation.\n\
+            Please re-download the complete bam distribution package from:\n\
+            https://github.com/jdoxey/bam/releases",
+            lld_path.display()
+        ))
+    }
+}
+
+fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> Result<(), String> {
+    // Use LLD with appropriate arguments for creating executable
+    let output = process::Command::new(lld_path)
+        .arg("-flavor")
+        .arg("gnu")  // Use GNU ld-compatible interface
+        .arg("-o")
+        .arg(executable_name)
+        .arg("/usr/lib/x86_64-linux-gnu/crt1.o")  // C runtime startup
+        .arg("/usr/lib/x86_64-linux-gnu/crti.o")  // C runtime init
+        .arg(object_file)                         // Our object file
+        .arg("/usr/lib/x86_64-linux-gnu/crtn.o")  // C runtime finish
+        .arg("-lc")  // Link against libc
+        .arg("-L/usr/lib/x86_64-linux-gnu")  // Add library search path
+        .arg("-L/lib/x86_64-linux-gnu")      // Add another library search path
+        .arg("-L/lib64")                     // Add lib64 path
+        .arg("-dynamic-linker")
+        .arg("/lib64/ld-linux-x86-64.so.2")  // Set dynamic linker path
+        .output()
+        .map_err(|e| format!("Failed to execute rust-lld: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("LLD linking failed: {}", stderr));
+    }
+
+    Ok(())
+}
+
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     
@@ -178,6 +235,20 @@ fn main() {
         Ok(_) => println!("Generated object file: {} ({} bytes)", object_file, object_bytes.len()),
         Err(e) => {
             eprintln!("Error writing object file '{}': {}", object_file, e);
+            process::exit(1);
+        }
+    }
+
+    // Link to create executable
+    let executable_name = &output_name;
+    match link_executable(&object_file, executable_name) {
+        Ok(_) => {
+            println!("Generated executable: {}", executable_name);
+            // Clean up object file
+            let _ = fs::remove_file(&object_file);
+        }
+        Err(e) => {
+            eprintln!("Error linking executable '{}': {}", executable_name, e);
             process::exit(1);
         }
     }
