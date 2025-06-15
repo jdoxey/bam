@@ -207,24 +207,56 @@ fn get_rust_lld() -> Result<PathBuf, String> {
 }
 
 fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> Result<(), String> {
-    // Use LLD with appropriate arguments for creating executable
-    let output = process::Command::new(lld_path)
-        .arg("-flavor")
-        .arg("gnu")  // Use GNU ld-compatible interface
-        .arg("-o")
-        .arg(executable_name)
-        .arg("/usr/lib/x86_64-linux-gnu/crt1.o")  // C runtime startup
-        .arg("/usr/lib/x86_64-linux-gnu/crti.o")  // C runtime init
-        .arg(object_file)                         // Our object file
-        .arg("/usr/lib/x86_64-linux-gnu/crtn.o")  // C runtime finish
-        .arg("-lc")  // Link against libc
-        .arg("-L/usr/lib/x86_64-linux-gnu")  // Add library search path
-        .arg("-L/lib/x86_64-linux-gnu")      // Add another library search path
-        .arg("-L/lib64")                     // Add lib64 path
-        .arg("-dynamic-linker")
-        .arg("/lib64/ld-linux-x86-64.so.2")  // Set dynamic linker path
-        .output()
-        .map_err(|e| format!("Failed to execute rust-lld: {}", e))?;
+    let mut cmd = process::Command::new(lld_path);
+    
+    // Use platform-specific linking arguments based on the host platform
+    #[cfg(target_os = "linux")]
+    {
+        cmd.arg("-flavor")
+            .arg("gnu")  // Use GNU ld-compatible interface
+            .arg("-o")
+            .arg(executable_name)
+            .arg("/usr/lib/x86_64-linux-gnu/crt1.o")  // C runtime startup
+            .arg("/usr/lib/x86_64-linux-gnu/crti.o")  // C runtime init
+            .arg(object_file)                         // Our object file
+            .arg("/usr/lib/x86_64-linux-gnu/crtn.o")  // C runtime finish
+            .arg("-lc")  // Link against libc
+            .arg("-L/usr/lib/x86_64-linux-gnu")  // Add library search path
+            .arg("-L/lib/x86_64-linux-gnu")      // Add another library search path
+            .arg("-L/lib64")                     // Add lib64 path
+            .arg("-dynamic-linker")
+            .arg("/lib64/ld-linux-x86-64.so.2");  // Set dynamic linker path
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        cmd.arg("-flavor")
+            .arg("darwin")  // Use Darwin (macOS) linker interface
+            .arg("-o")
+            .arg(executable_name)
+            .arg(object_file)                    // Our object file
+            .arg("-lSystem")                     // Link against libSystem (includes libc)
+            .arg("-arch")
+            .arg("x86_64")                       // Target architecture
+            .arg("-platform_version")
+            .arg("macos")
+            .arg("10.9")                         // Minimum macOS version
+            .arg("14.0");                        // Current SDK version
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        cmd.arg("-flavor")
+            .arg("link")  // Use MSVC linker interface
+            .arg(&format!("/out:{}", executable_name))
+            .arg(object_file)                    // Our object file
+            .arg("/defaultlib:msvcrt")           // Link against MSVC runtime
+            .arg("/defaultlib:kernel32")         // Link against kernel32
+            .arg("/subsystem:console");          // Console application
+    }
+    
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to execute LLD: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

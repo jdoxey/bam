@@ -79,22 +79,22 @@ jobs:
           echo "✅ Release branch $BRANCH exists"
 
   build:
-    name: Build and Package (${{ matrix.target }})
+    name: Build and Package (${{ matrix.artifact_name }})
     needs: [validate-inputs]
     if: always() && (needs.validate-inputs.result == 'success' || github.event_name == 'push')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+          - os: ubuntu-latest
             lld_name: ld.lld
-          - target: x86_64-apple-darwin
-            os: macos-latest
+            artifact_name: x86_64-unknown-linux-gnu
+          - os: macos-latest
             lld_name: ld.lld
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            artifact_name: x86_64-apple-darwin
+          - os: windows-latest
             lld_name: ld.lld.exe
+            artifact_name: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -103,8 +103,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -143,10 +141,10 @@ jobs:
           sed -i.bak 's/^version = ".*"/version = "${{ steps.release_version.outputs.version }}"/' Cargo.toml
 
       - name: Run tests
-        run: cargo test --target ${{ matrix.target }}
+        run: cargo test
 
       - name: Build bam
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release
 
       - name: Extract rust-lld for bundling
         shell: bash
@@ -171,9 +169,9 @@ jobs:
             
             # Copy bam executable  
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              cp "target/${{ matrix.target }}/release/bam.exe" "package/"
+              cp "target/release/bam.exe" "package/"
             else
-              cp "target/${{ matrix.target }}/release/bam" "package/"
+              cp "target/release/bam" "package/"
             fi
             
             echo "Package contents:"
@@ -208,23 +206,23 @@ jobs:
           # Create platform-specific archive
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Create ZIP for Windows
-            7z a "../bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.zip" .
+            7z a "../bam-${{ steps.release_version.outputs.version }}-${{ matrix.artifact_name }}.zip" .
           else
             # Create tar.gz for Unix-like systems
-            tar -czf "../bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.tar.gz" .
+            tar -czf "../bam-${{ steps.release_version.outputs.version }}-${{ matrix.artifact_name }}.tar.gz" .
           fi
           
           cd ..
           echo "Created package:"
-          ls -la bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.*
+          ls -la bam-${{ steps.release_version.outputs.version }}-${{ matrix.artifact_name }}.*
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.target }}-${{ steps.release_version.outputs.version }}
+          name: release-${{ matrix.artifact_name }}-${{ steps.release_version.outputs.version }}
           path: |
-            bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.tar.gz
-            bam-${{ steps.release_version.outputs.version }}-${{ matrix.target }}.zip
+            bam-${{ steps.release_version.outputs.version }}-${{ matrix.artifact_name }}.tar.gz
+            bam-${{ steps.release_version.outputs.version }}-${{ matrix.artifact_name }}.zip
           if-no-files-found: ignore
           retention-days: 90
 
