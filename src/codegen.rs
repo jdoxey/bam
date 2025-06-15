@@ -106,15 +106,15 @@ impl CodeGenerator {
         // Create a very simple main function
         let mut _variables: HashMap<String, Variable> = HashMap::new();
 
-        // Skip statement compilation entirely - test if issue is in our compilation logic
-        // CodeGenerator::compile_statements_static(
-        //     statements,
-        //     &mut builder,
-        //     &mut _variables,
-        //     &mut self.module,
-        //     self.printf_func.unwrap(),
-        //     &self.string_data,
-        // );
+        // Add back statement compilation to test if function calls cause the issue
+        CodeGenerator::compile_statements_static(
+            statements,
+            &mut builder,
+            &mut _variables,
+            &mut self.module,
+            self.printf_func.unwrap(),
+            &self.string_data,
+        );
 
         // Return 0 (success)
         let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
@@ -208,21 +208,20 @@ impl CodeGenerator {
             }
             Expr::Call(func_name, args) => {
                 if func_name == "print" {
-                    // Test function call mechanism with exit(0) - simpler than strings
-                    if let Some((param_name, _expr)) = args.first() {
+                    // Test function call mechanism with puts - this should cause the bus error
+                    if let Some((param_name, expr)) = args.first() {
                         if param_name == "message" {
-                            // Call exit(0) instead of puts to test function call mechanism
-                            let zero = builder.ins().iconst(cranelift_codegen::ir::types::I32, 0);
+                            // Get the string pointer and call puts
+                            let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
                             
-                            let exit_func_ref = module.declare_func_in_func(
-                                printf_func, // This is actually exit_func_id now
+                            let puts_func_ref = module.declare_func_in_func(
+                                printf_func, // This is puts_func_id
                                 builder.func
                             );
-                            // This should exit the program immediately if the function call works
-                            let _call_inst = builder.ins().call(exit_func_ref, &[zero]);
-                            
-                            // This shouldn't be reached if exit() works
-                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                            // This should cause the bus error on macOS
+                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
+                            let results = builder.inst_results(call_inst);
+                            results[0]
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
