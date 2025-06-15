@@ -267,9 +267,32 @@ impl CodeGenerator {
                             // First create a null pointer as before (unused but kept for reference)
                             let _null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
                             
-                            // Temporarily skip the function call to isolate the issue
-                            // Just return success without calling puts to test if execution works
-                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                            // Try a more explicit approach to function calling on Apple Silicon
+                            // Research showed Apple's ARM64 ABI has specific requirements
+                            
+                            // Ensure the string parameter is properly prepared
+                            let string_ptr = message_val;
+                            
+                            // Try using call_indirect instead of direct call for better control
+                            // First get the function reference 
+                            let puts_func_ref = module.declare_func_in_func(
+                                printf_func,
+                                builder.func
+                            );
+                            
+                            // Create a function pointer from the reference
+                            let func_addr = builder.ins().func_addr(module.target_config().pointer_type(), puts_func_ref);
+                            
+                            // Create signature for indirect call
+                            let mut call_sig = module.make_signature();
+                            call_sig.call_conv = cranelift_codegen::isa::CallConv::AppleAarch64;
+                            call_sig.params.push(cranelift_codegen::ir::AbiParam::new(module.target_config().pointer_type()));
+                            call_sig.returns.push(cranelift_codegen::ir::AbiParam::new(cranelift_codegen::ir::types::I32));
+                            
+                            // Make the indirect call with explicit signature control
+                            let call_inst = builder.ins().call_indirect(call_sig, func_addr, &[string_ptr]);
+                            let results = builder.inst_results(call_inst);
+                            results[0]
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
