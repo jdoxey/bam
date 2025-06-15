@@ -23,6 +23,12 @@ impl CodeGenerator {
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
         flag_builder.set("is_pic", "false").unwrap();
         
+        // Try to force frame pointer preservation on Apple ARM64 for better stack alignment
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            flag_builder.set("preserve_frame_pointers", "true").unwrap();
+        }
+        
         // Detect the target triple for proper object format
         let target_triple = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
             "aarch64-apple-darwin"
@@ -65,8 +71,9 @@ impl CodeGenerator {
         let mut puts_sig = self.module.make_signature();
         
         // Set the calling convention explicitly for the target platform
+        // Try SystemV instead of AppleAarch64 to see if it has better stack alignment
         puts_sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            cranelift_codegen::isa::CallConv::AppleAarch64
+            cranelift_codegen::isa::CallConv::SystemV  // Try SystemV instead of AppleAarch64
         } else if cfg!(target_os = "linux") {
             cranelift_codegen::isa::CallConv::SystemV
         } else {
@@ -96,8 +103,9 @@ impl CodeGenerator {
         sig.params.clear();
         
         // Set the calling convention explicitly for the target platform
+        // Try SystemV instead of AppleAarch64 to see if it has better stack alignment
         sig.call_conv = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            cranelift_codegen::isa::CallConv::AppleAarch64
+            cranelift_codegen::isa::CallConv::SystemV  // Try SystemV instead of AppleAarch64
         } else if cfg!(target_os = "linux") {
             cranelift_codegen::isa::CallConv::SystemV
         } else {
@@ -118,6 +126,20 @@ impl CodeGenerator {
         builder.append_block_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block);
         builder.seal_block(entry_block);
+        
+        // Ensure stack alignment for Apple ARM64 - create a dummy stack slot to force alignment
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            // Create a 16-byte aligned stack slot to force proper stack frame setup
+            let alignment_slot = builder.create_sized_stack_slot(cranelift_codegen::ir::StackSlotData::new(
+                cranelift_codegen::ir::StackSlotKind::ExplicitSlot,
+                16,
+                Some(16), // Force 16-byte alignment
+            ));
+            
+            // Touch the stack slot to ensure it's allocated in the prologue
+            let _addr = builder.ins().stack_addr(self.module.target_config().pointer_type(), alignment_slot, 0);
+        }
 
         // Create a very simple main function
         let mut _variables: HashMap<String, Variable> = HashMap::new();
@@ -224,15 +246,27 @@ impl CodeGenerator {
             }
             Expr::Call(func_name, args) => {
                 if func_name == "print" {
-                    // Test function call mechanism with puts - this should cause the bus error
+                    // Test if the issue is in call instruction generation vs stack frame setup
                     if let Some((param_name, expr)) = args.first() {
                         if param_name == "message" {
-                            // For debugging: compile the expression but don't call the function
-                            let _message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
+                            // Get the actual message value for later use
+                            let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
                             
-                            // Skip the actual function call - just return 0
-                            // This tests if the issue is in expression compilation vs function calls
-                            builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
+                            let puts_func_ref = module.declare_func_in_func(
+                                printf_func,
+                                builder.func
+                            );
+                            
+                            // Try a different approach: test if we can call without parameters first
+                            // This might reveal if the issue is in parameter handling vs call instruction
+                            
+                            // First create a null pointer as before
+                            let null_ptr = builder.ins().iconst(module.target_config().pointer_type(), 0);
+                            
+                            // Try the actual function call with the real message to debug the bus error
+                            let call_inst = builder.ins().call(puts_func_ref, &[message_val]);
+                            let results = builder.inst_results(call_inst);
+                            results[0]
                         } else {
                             builder.ins().iconst(cranelift_codegen::ir::types::I32, 0)
                         }
