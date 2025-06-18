@@ -150,6 +150,8 @@ jobs:
 
       - name: Build bam
         if: matrix.os == 'ubuntu-20.04'
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
         run: cargo build --release --target x86_64-unknown-linux-musl
       - name: Build bam
         if: matrix.os != 'ubuntu-20.04'
