@@ -87,9 +87,9 @@ jobs:
       matrix:
         include:
           # Temporarily disable Linux and Windows to focus on macOS
-          # - os: ubuntu-latest
-          #   lld_name: ld.lld
-          #   artifact_name: x86_64-unknown-linux-gnu
+          - os: ubuntu-20.04
+            lld_name: ld.lld
+            artifact_name: x86_64-unknown-linux-gnu
           - os: macos-latest
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
