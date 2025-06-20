@@ -14,9 +14,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             lld_name: ld.lld
-            artifact_name: x86_64-unknown-linux-gnu
+            artifact_name: x86_64-unknown-linux-musl
           - os: macos-latest
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
@@ -77,8 +77,19 @@ jobs:
       - name: Run tests
         run: cargo test
 
-      - name: Build bam
+      - name: Install musl target for Rust
+        if: matrix.os == 'ubuntu-20.04'
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Build bam (non-Linux)
+        if: matrix.os != 'ubuntu-20.04'
         run: cargo build --release
+
+      - name: Build bam (Linux musl)
+        if: matrix.os == 'ubuntu-20.04'
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: cargo build --release --target x86_64-unknown-linux-musl
 
       - name: Create package with rust-lld symlink
         shell: bash
@@ -113,6 +124,8 @@ jobs:
             # Copy bam executable  
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
               cp "target/release/bam.exe" "package/"
+            elif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then
+              cp "target/x86_64-unknown-linux-musl/release/bam" "package/"
             else
               cp "target/release/bam" "package/"
             fi
@@ -245,7 +258,7 @@ jobs:
             ### Installation
             
             Download the appropriate package for your platform:
-            - Linux: `bam-${{ steps.version.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz`
+            - Linux: `bam-${{ steps.version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
             - macOS: `bam-${{ steps.version.outputs.version }}-x86_64-apple-darwin.tar.gz`
             - Windows: `bam-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.zip`
             
