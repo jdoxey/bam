@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             lld_name: ld.lld
             artifact_name: x86_64-unknown-linux-musl
           - os: macos-latest
@@ -78,15 +78,15 @@ jobs:
         run: cargo test
 
       - name: Install musl target for Rust
-        if: matrix.os == 'ubuntu-20.04'
+        if: matrix.artifact_name == 'x86_64-unknown-linux-musl'
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Build bam (non-Linux)
-        if: matrix.os != 'ubuntu-20.04'
+        if: matrix.artifact_name != 'x86_64-unknown-linux-musl'
         run: cargo build --release
 
       - name: Build bam (Linux musl)
-        if: matrix.os == 'ubuntu-20.04'
+        if: matrix.artifact_name == 'x86_64-unknown-linux-musl'
         env:
           RUSTFLAGS: "-C target-feature=+crt-static"
         run: cargo build --release --target x86_64-unknown-linux-musl
@@ -124,7 +124,7 @@ jobs:
             # Copy bam executable  
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
               cp "target/release/bam.exe" "package/"
-            elif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then
+            elif [[ "${{ matrix.artifact_name }}" == "x86_64-unknown-linux-musl" ]]; then
               cp "target/x86_64-unknown-linux-musl/release/bam" "package/"
             else
               cp "target/release/bam" "package/"
