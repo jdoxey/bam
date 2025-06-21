@@ -12,13 +12,33 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Determine if this is a 'develop' branch push (Beta) or other branch push (Alpha)
-  BUILD_TYPE: ${{ github.ref == 'refs/heads/develop' && 'beta' || 'alpha' }}
+  # BUILD_TYPE will now be set in the 'build' job using the output of the 'setup' job.
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      build_type: ${{ steps.determine_build_type.outputs.build_type }}
+      build_name_prefix: ${{ steps.determine_build_type.outputs.build_name_prefix }}
+    steps:
+      - name: Determine Build Type
+        id: determine_build_type
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "build_type=beta" >> $GITHUB_OUTPUT
+            echo "build_name_prefix=Beta" >> $GITHUB_OUTPUT
+          else
+            echo "build_type=alpha" >> $GITHUB_OUTPUT
+            echo "build_name_prefix=Alpha" >> $GITHUB_OUTPUT
+          fi
+
   build:
-    name: ${{ env.BUILD_TYPE == 'beta' && 'Beta' || 'Alpha' }} Build (${{ matrix.artifact_name }})
+    name: ${{ needs.setup.outputs.build_name_prefix }} Build (${{ matrix.artifact_name }})
+    needs: setup
     runs-on: ${{ matrix.os }}
+    env: # Set BUILD_TYPE at the job level for steps to use
+      BUILD_TYPE: ${{ needs.setup.outputs.build_type }}
     strategy:
       fail-fast: false # Ensure all matrix jobs run even if one fails (especially for Alpha builds)
       matrix:
@@ -292,10 +312,11 @@ jobs:
 
   build-summary:
     name: Build Summary
-    needs: build
+    needs: [setup, build] # Also needs setup to get build_type
     runs-on: ubuntu-latest
     if: always() # Run even if builds fail to provide a summary
-
+    env: # Make BUILD_TYPE available to this job's steps
+      BUILD_TYPE: ${{ needs.setup.outputs.build_type }}
     steps:
       - name: Report build status
         shell: bash
