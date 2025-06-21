@@ -390,9 +390,10 @@ impl CodeGenerator {
                                     0 // This line should ideally not be hit by the test.
                                 };
 
-                                let len_val = builder
-                                    .ins()
-                                    .iconst(module.target_config().pointer_type(), string_length as i64);
+                                let len_val = builder.ins().iconst(
+                                    module.target_config().pointer_type(),
+                                    string_length as i64,
+                                );
 
                                 // Try the write system call with working string data
                                 let call_inst = builder
