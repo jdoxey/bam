@@ -36,77 +36,8 @@ pub enum Value {
     Bool(bool),
 }
 
-fn eval_expr(expr: &Expr, env: &HashMap<String, Value>) -> Value {
-    match expr {
-        Expr::Num(n) => Value::Num(*n),
-        Expr::Str(s) => Value::Str(s.clone()),
-        Expr::Add(l, r) => {
-            let left = eval_expr(l, env);
-            let right = eval_expr(r, env);
-            match (left, right) {
-                (Value::Num(a), Value::Num(b)) => Value::Num(a + b),
-                _ => panic!("Cannot add non-numbers"),
-            }
-        }
-        Expr::Var(name) => env.get(name).cloned().unwrap_or(Value::Num(0)),
-        Expr::Eq(l, r) => {
-            let left = eval_expr(l, env);
-            let right = eval_expr(r, env);
-            match (left, right) {
-                (Value::Num(a), Value::Num(b)) => Value::Bool(a == b),
-                (Value::Str(a), Value::Str(b)) => Value::Bool(a == b),
-                (Value::Bool(a), Value::Bool(b)) => Value::Bool(a == b),
-                _ => Value::Bool(false),
-            }
-        }
-        Expr::Call(func_name, args) => {
-            if func_name == "print" {
-                if let Some((param_name, expr)) = args.first() {
-                    if param_name == "message" {
-                        let value = eval_expr(expr, env);
-                        match value {
-                            Value::Str(s) => println!("{}", s),
-                            Value::Num(n) => println!("{}", n),
-                            Value::Bool(b) => println!("{}", b),
-                        }
-                        Value::Num(0)
-                    } else {
-                        panic!("print() requires 'message' parameter");
-                    }
-                } else {
-                    panic!("print() requires a message parameter");
-                }
-            } else {
-                panic!("Unknown function: {}", func_name);
-            }
-        }
-    }
-}
-
-fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) {
-    match stmt {
-        Stmt::Assign(var, expr) => {
-            let value = eval_expr(expr, env);
-            env.insert(var.clone(), value);
-        }
-        Stmt::Expr(expr) => {
-            eval_expr(expr, env);
-        }
-        Stmt::If(cond, body) => {
-            let condition = eval_expr(cond, env);
-            let is_true = match condition {
-                Value::Bool(b) => b,
-                Value::Num(n) => n != 0,
-                Value::Str(s) => !s.is_empty(),
-            };
-            if is_true {
-                for stmt in body {
-                    eval_stmt(stmt, env);
-                }
-            }
-        }
-    }
-}
+// Removed unused function eval_expr
+// Removed unused function eval_stmt
 
 fn compile_program(statements: &[Stmt]) -> Vec<u8> {
     let codegen = codegen::CodeGenerator::new();
@@ -306,13 +237,13 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("gnu")  // Use GNU ld-compatible interface
             .arg("-o")
             .arg(executable_name)
-            .arg(&format!("/usr/lib/{}/crt1.o", lib_dir))  // C runtime startup
-            .arg(&format!("/usr/lib/{}/crti.o", lib_dir))  // C runtime init
+            .arg(format!("/usr/lib/{}/crt1.o", lib_dir))  // C runtime startup
+            .arg(format!("/usr/lib/{}/crti.o", lib_dir))  // C runtime init
             .arg(object_file)                              // Our object file
-            .arg(&format!("/usr/lib/{}/crtn.o", lib_dir))  // C runtime finish
+            .arg(format!("/usr/lib/{}/crtn.o", lib_dir))  // C runtime finish
             .arg("-lc")  // Link against libc
-            .arg(&format!("-L/usr/lib/{}", lib_dir))  // Add library search path
-            .arg(&format!("-L/lib/{}", lib_dir))      // Add another library search path
+            .arg(format!("-L/usr/lib/{}", lib_dir))  // Add library search path
+            .arg(format!("-L/lib/{}", lib_dir))      // Add another library search path
             .arg("-L/lib64")                          // Add lib64 path
             .arg("-dynamic-linker")
             .arg(linker_path);  // Set dynamic linker path

@@ -97,7 +97,7 @@ impl CodeGenerator {
 
         // Add back string processing to test if global data causes issues
         let mut string_literals = Vec::new();
-        self.collect_string_literals(statements, &mut string_literals);
+        CodeGenerator::collect_string_literals(statements, &mut string_literals);
         
         // Create string data before main compilation
         // Now using PIC mode on macOS to handle global data properly
@@ -267,7 +267,8 @@ impl CodeGenerator {
                             // Get the actual message value for later use
                             let message_val = CodeGenerator::compile_expression_static(expr, builder, variables, module, printf_func, string_data);
                             
-                            let puts_func_ref = module.declare_func_in_func(
+                            // This _puts_func_ref is shadowed below if not macOS, prefixing to avoid unused warning.
+                            let _puts_func_ref = module.declare_func_in_func(
                                 printf_func,
                                 builder.func
                             );
@@ -327,26 +328,29 @@ impl CodeGenerator {
         }
     }
 
-    fn collect_string_literals(&self, statements: &[Stmt], strings: &mut Vec<String>) {
+    // Made static as `self` was not used
+    fn collect_string_literals(statements: &[Stmt], strings: &mut Vec<String>) {
         for stmt in statements {
-            self.collect_strings_from_stmt(stmt, strings);
+            CodeGenerator::collect_strings_from_stmt(stmt, strings);
         }
     }
 
-    fn collect_strings_from_stmt(&self, stmt: &Stmt, strings: &mut Vec<String>) {
+    // Made static as `self` was not used
+    fn collect_strings_from_stmt(stmt: &Stmt, strings: &mut Vec<String>) {
         match stmt {
-            Stmt::Assign(_, expr) => self.collect_strings_from_expr(expr, strings),
-            Stmt::Expr(expr) => self.collect_strings_from_expr(expr, strings),
+            Stmt::Assign(_, expr) => CodeGenerator::collect_strings_from_expr(expr, strings),
+            Stmt::Expr(expr) => CodeGenerator::collect_strings_from_expr(expr, strings),
             Stmt::If(cond, body) => {
-                self.collect_strings_from_expr(cond, strings);
+                CodeGenerator::collect_strings_from_expr(cond, strings);
                 for stmt in body {
-                    self.collect_strings_from_stmt(stmt, strings);
+                    CodeGenerator::collect_strings_from_stmt(stmt, strings);
                 }
             }
         }
     }
 
-    fn collect_strings_from_expr(&self, expr: &Expr, strings: &mut Vec<String>) {
+    // Made static as `self` was not used
+    fn collect_strings_from_expr(expr: &Expr, strings: &mut Vec<String>) {
         match expr {
             Expr::Str(s) => {
                 if !strings.contains(s) {
@@ -354,17 +358,17 @@ impl CodeGenerator {
                 }
             }
             Expr::Add(left, right) => {
-                self.collect_strings_from_expr(left, strings);
-                self.collect_strings_from_expr(right, strings);
+                CodeGenerator::collect_strings_from_expr(left, strings);
+                CodeGenerator::collect_strings_from_expr(right, strings);
             }
             Expr::Call(_, args) => {
                 for (_, expr) in args {
-                    self.collect_strings_from_expr(expr, strings);
+                    CodeGenerator::collect_strings_from_expr(expr, strings);
                 }
             }
             Expr::Eq(left, right) => {
-                self.collect_strings_from_expr(left, strings);
-                self.collect_strings_from_expr(right, strings);
+                CodeGenerator::collect_strings_from_expr(left, strings);
+                CodeGenerator::collect_strings_from_expr(right, strings);
             }
             _ => {}
         }
