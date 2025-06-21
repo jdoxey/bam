@@ -181,40 +181,71 @@ jobs:
           fi
           echo "source_bam_path=$SOURCE_BAM_PATH" >> $GITHUB_OUTPUT
 
-      - name: Extract rust-lld for bundling
+      - name: Download and Extract Standalone LLD (macOS)
+        if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Get the host toolchain directory (rust-lld is in host toolchain, not target-specific)
-          HOST_LIBDIR=$(rustc --print target-libdir)
-          echo "Host lib dir: $HOST_LIBDIR"
-          
-          # Determine LLD name for package (generic name)
-          PACKAGE_LLD_NAME="rust-lld"
-          [[ "${{ matrix.os }}" == "windows-latest" ]] && PACKAGE_LLD_NAME="rust-lld.exe"
+          LLVM_VERSION="17.0.6"
+          LLVM_ARCH="arm64-apple-darwin22.0" # Corrected specific architecture string
+          LLVM_TARBALL="clang+llvm-${LLVM_VERSION}-${LLVM_ARCH}.tar.xz"
+          LLVM_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/${LLVM_TARBALL}"
+          LLVM_EXTRACT_DIR="llvm_extracted"
 
-          # Find rust-lld in the host toolchain using matrix.lld_name as source
+          echo "Downloading ${LLVM_URL}"
+          curl -L -o "${LLVM_TARBALL}" "${LLVM_URL}"
+          
+          echo "Extracting ${LLVM_TARBALL}"
+          mkdir -p "${LLVM_EXTRACT_DIR}"
+          tar -xf "${LLVM_TARBALL}" -C "${LLVM_EXTRACT_DIR}" --strip-components=1
+
+          echo "Standalone LLD path: ${LLVM_EXTRACT_DIR}/bin/lld"
+          ls -l "${LLVM_EXTRACT_DIR}/bin/lld"
+
+      - name: Package LLD and bam executable
+        shell: bash
+        run: |
+          mkdir -p package
+
+          # Determine LLD source and final name in package
+          PACKAGED_LLD_NAME="ld.lld" # Consistent name as per documentation
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RUST_LLD_PATH="$HOST_LIBDIR/../bin/${{ matrix.lld_name }}" # Should be ld.lld.exe
+            PACKAGED_LLD_NAME="ld.lld.exe"
+          fi
+
+          if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
+            LLVM_EXTRACT_DIR="llvm_extracted"
+            STANDALONE_LLD_PATH="${LLVM_EXTRACT_DIR}/bin/lld"
+            echo "Using standalone LLD from ${STANDALONE_LLD_PATH} for macOS"
+            cp "${STANDALONE_LLD_PATH}" "package/${PACKAGED_LLD_NAME}"
           else
-            RUST_LLD_PATH="$HOST_LIBDIR/../bin/${{ matrix.lld_name }}" # Should be ld.lld
+            # For Linux and Windows, use rust-lld from host toolchain (current behavior)
+            HOST_LIBDIR=$(rustc --print target-libdir)
+            echo "Host lib dir: $HOST_LIBDIR"
+
+            # matrix.lld_name is ld.lld or ld.lld.exe
+            RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/${{ matrix.lld_name }}"
+
+            echo "Looking for host LLD at: $RUST_LLD_ORIG_PATH (using matrix.lld_name: ${{ matrix.lld_name }})"
+            if [[ ! -f "$RUST_LLD_ORIG_PATH" ]]; then
+              echo "Error: Host LLD not found at $RUST_LLD_ORIG_PATH"
+              exit 1
+            fi
+            echo "Found host LLD, copying to package as $PACKAGED_LLD_NAME"
+            cp "$RUST_LLD_ORIG_PATH" "package/${PACKAGED_LLD_NAME}"
           fi
           
-          echo "Looking for rust-lld at: $RUST_LLD_PATH (using matrix.lld_name: ${{ matrix.lld_name }})"
+          chmod +x "package/${PACKAGED_LLD_NAME}"
+
+          # Copy bam executable
+          echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to package/${{ steps.bam_exe.outputs.bam_exe_name }}"
+          cp "${{ steps.bam_exe.outputs.source_bam_path }}" "package/${{ steps.bam_exe.outputs.bam_exe_name }}"
           
-          if [[ -f "$RUST_LLD_PATH" ]]; then
-            echo "Found rust-lld, copying to package as $PACKAGE_LLD_NAME"
-            mkdir -p package
-            cp "$RUST_LLD_PATH" "package/$PACKAGE_LLD_NAME"
-            
-            # Copy bam executable
-            echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to package/${{ steps.bam_exe.outputs.bam_exe_name }}"
-            cp "${{ steps.bam_exe.outputs.source_bam_path }}" "package/${{ steps.bam_exe.outputs.bam_exe_name }}"
-            
-            echo "Package contents:"
-            ls -la package/
-          else
-            echo "Error: rust-lld not found at $RUST_LLD_PATH"
-            exit 1
+          echo "Package contents:"
+          ls -la package/
+
+          if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
+            echo "Verifying dynamic dependencies of packaged ld.lld on macOS:"
+            otool -L "package/ld.lld"
           fi
 
       - name: Test compilation end-to-end
