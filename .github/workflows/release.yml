@@ -151,6 +151,7 @@ jobs:
         run: cargo test
 
       - name: Install Rust target
+        shell: bash # Ensure this runs in bash for all OSs, especially Windows
         run: |
           if [[ -n "${{ matrix.target }}" ]]; then
             rustup target add ${{ matrix.target }}
