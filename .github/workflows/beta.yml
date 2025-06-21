@@ -17,12 +17,19 @@ jobs:
           - os: ubuntu-latest
             lld_name: ld.lld
             artifact_name: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-musl
           - os: macos-latest
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            lld_name: ld.lld
+            artifact_name: x86_64-apple-darwin
+            target: x86_64-apple-darwin
           - os: windows-latest
             lld_name: ld.lld.exe
             artifact_name: x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -77,19 +84,41 @@ jobs:
       - name: Run tests
         run: cargo test
 
-      - name: Install musl target for Rust
-        if: matrix.artifact_name == 'x86_64-unknown-linux-musl'
-        run: rustup target add x86_64-unknown-linux-musl
+      - name: Install Rust target
+        # Always run rustup target add, it's idempotent and quick if already installed.
+        # Handles cases where matrix.target might be empty if we forget to add one.
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            rustup target add ${{ matrix.target }}
+          else
+            echo "No specific target in matrix, assuming native build."
+          fi
 
-      - name: Build bam (non-Linux)
-        if: matrix.artifact_name != 'x86_64-unknown-linux-musl'
-        run: cargo build --release
-
-      - name: Build bam (Linux musl)
-        if: matrix.artifact_name == 'x86_64-unknown-linux-musl'
+      - name: Build bam
         env:
-          RUSTFLAGS: "-C target-feature=+crt-static"
-        run: cargo build --release --target x86_64-unknown-linux-musl
+          RUSTFLAGS: ${{ (matrix.target == 'x86_64-unknown-linux-musl' && '-C target-feature=+crt-static') || '' }}
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            cargo build --release --target ${{ matrix.target }}
+          else
+            # Fallback for any matrix entry that might not have a target (e.g. if we add a test-only native build later)
+            cargo build --release
+          fi
+
+      - name: Determine Bam Executable Name and Path
+        id: bam_exe
+        shell: bash
+        run: |
+          BAM_EXE_NAME="bam"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && BAM_EXE_NAME="bam.exe"
+          echo "bam_exe_name=$BAM_EXE_NAME" >> $GITHUB_OUTPUT
+
+          if [[ -n "${{ matrix.target }}" ]]; then
+            SOURCE_BAM_PATH="target/${{ matrix.target }}/release/$BAM_EXE_NAME"
+          else
+            SOURCE_BAM_PATH="target/release/$BAM_EXE_NAME"
+          fi
+          echo "source_bam_path=$SOURCE_BAM_PATH" >> $GITHUB_OUTPUT
 
       - name: Create package with rust-lld symlink
         shell: bash
@@ -121,14 +150,9 @@ jobs:
               ln -sf "$RUST_LLD_PATH" "package/rust-lld"
             fi
             
-            # Copy bam executable  
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              cp "target/release/bam.exe" "package/"
-            elif [[ "${{ matrix.artifact_name }}" == "x86_64-unknown-linux-musl" ]]; then
-              cp "target/x86_64-unknown-linux-musl/release/bam" "package/"
-            else
-              cp "target/release/bam" "package/"
-            fi
+            # Copy bam executable
+            echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to package/${{ steps.bam_exe.outputs.bam_exe_name }}"
+            cp "${{ steps.bam_exe.outputs.source_bam_path }}" "package/${{ steps.bam_exe.outputs.bam_exe_name }}"
             
             echo "Package contents:"
             ls -la package/
@@ -150,31 +174,24 @@ jobs:
           # First, let's see what object file format we generate
           export KEEP_OBJECT_FILE=1
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            ./bam.exe test.bam 2>&1 || true
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam 2>&1 || true
             echo "Object file format check:"
             file test.o 2>/dev/null || echo "No test.o found or file command not available"
           else
-            ./bam test.bam 2>&1 || true
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam 2>&1 || true
             echo "Object file format check:"
             file test.o 2>/dev/null || echo "No test.o found or file command not available"
           fi
           
           echo "=== Testing executable run ==="
           # Test running the executable if it was created
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            if [[ -f "test.exe" ]]; then
-              echo "Running test.exe:"
-              ./test.exe
-            else
-              echo "test.exe not found - compilation failed"
-            fi
+          TEST_OUTPUT_EXE="test"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && TEST_OUTPUT_EXE="test.exe"
+          if [[ -f "$TEST_OUTPUT_EXE" ]]; then
+            echo "Running $TEST_OUTPUT_EXE:"
+            ./$TEST_OUTPUT_EXE
           else
-            if [[ -f "test" ]]; then
-              echo "Running test:"
-              ./test
-            else
-              echo "test executable not found - compilation failed"
-            fi
+            echo "$TEST_OUTPUT_EXE not found - compilation failed"
           fi
 
       - name: Create beta package
@@ -258,9 +275,10 @@ jobs:
             ### Installation
             
             Download the appropriate package for your platform:
-            - Linux: `bam-${{ steps.version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
-            - macOS: `bam-${{ steps.version.outputs.version }}-x86_64-apple-darwin.tar.gz`
-            - Windows: `bam-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.zip`
+            - Linux (x86_64 musl): `bam-${{ steps.version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
+            - macOS (Apple Silicon, arm64): `bam-${{ steps.version.outputs.version }}-aarch64-apple-darwin.tar.gz`
+            - macOS (Intel, x86_64): `bam-${{ steps.version.outputs.version }}-x86_64-apple-darwin.tar.gz`
+            - Windows (x86_64 msvc): `bam-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.zip`
             
             ### Testing
             

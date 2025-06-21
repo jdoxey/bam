@@ -18,12 +18,19 @@ jobs:
           # - os: ubuntu-latest
           #   lld_name: ld.lld
           #   artifact_name: x86_64-unknown-linux-gnu
+          #   target: x86_64-unknown-linux-gnu
           - os: macos-latest
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
+            target: aarch64-apple-darwin
+          - os: macos-latest # Add Intel Mac
+            lld_name: ld.lld
+            artifact_name: x86_64-apple-darwin
+            target: x86_64-apple-darwin
           # - os: windows-latest
           #   lld_name: ld.lld.exe
           #   artifact_name: x86_64-pc-windows-msvc
+          #   target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -75,8 +82,38 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
+      - name: Install Rust target
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            rustup target add ${{ matrix.target }}
+          else
+            echo "No specific target in matrix, assuming native build."
+          fi
+
       - name: Build bam
-        run: cargo build --release
+        env:
+          RUSTFLAGS: ${{ (matrix.target == 'x86_64-unknown-linux-musl' && '-C target-feature=+crt-static') || '' }}
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            cargo build --release --target ${{ matrix.target }}
+          else
+            cargo build --release
+          fi
+
+      - name: Determine Bam Executable Name and Path
+        id: bam_exe
+        shell: bash
+        run: |
+          BAM_EXE_NAME="bam"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && BAM_EXE_NAME="bam.exe"
+          echo "bam_exe_name=$BAM_EXE_NAME" >> $GITHUB_OUTPUT
+
+          if [[ -n "${{ matrix.target }}" ]]; then
+            SOURCE_BAM_PATH="target/${{ matrix.target }}/release/$BAM_EXE_NAME"
+          else
+            SOURCE_BAM_PATH="target/release/$BAM_EXE_NAME"
+          fi
+          echo "source_bam_path=$SOURCE_BAM_PATH" >> $GITHUB_OUTPUT
 
       - name: Extract rust-lld for bundling
         shell: bash
@@ -97,14 +134,11 @@ jobs:
           if [[ -f "$RUST_LLD_PATH" ]]; then
             echo "Found rust-lld, copying to package"
             mkdir -p package
-            cp "$RUST_LLD_PATH" "package/${{ matrix.lld_name }}"
+            cp "$RUST_LLD_PATH" "package/${{ matrix.lld_name }}" # lld_name should be generic e.g. rust-lld
             
-            # Copy bam executable  
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              cp "target/release/bam.exe" "package/"
-            else
-              cp "target/release/bam" "package/"
-            fi
+            # Copy bam executable
+            echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to package/${{ steps.bam_exe.outputs.bam_exe_name }}"
+            cp "${{ steps.bam_exe.outputs.source_bam_path }}" "package/${{ steps.bam_exe.outputs.bam_exe_name }}"
             
             echo "Package contents:"
             ls -la package/
@@ -122,12 +156,15 @@ jobs:
           echo 'print(message: "Hello from alpha build!")' > test.bam
           
           # Test compilation
+          TEST_OUTPUT_EXE="test"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && TEST_OUTPUT_EXE="test.exe"
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            ./bam.exe test.bam
-            ./test.exe
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam
+            ./$TEST_OUTPUT_EXE
           else
-            ./bam test.bam
-            ./test
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam
+            ./$TEST_OUTPUT_EXE
           fi
 
       - name: Create alpha package

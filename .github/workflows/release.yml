@@ -86,16 +86,22 @@ jobs:
     strategy:
       matrix:
         include:
-          # Temporarily disable Linux and Windows to focus on macOS
-          - os: ubuntu-20.04
+          - os: ubuntu-20.04 # Keep specific ubuntu for musl if needed, or use ubuntu-latest
             lld_name: ld.lld
             artifact_name: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-musl
           - os: macos-latest
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
-          # - os: windows-latest
-          #   lld_name: ld.lld.exe
-          #   artifact_name: x86_64-pc-windows-msvc
+            target: aarch64-apple-darwin
+          - os: macos-latest # Add Intel Mac
+            lld_name: ld.lld
+            artifact_name: x86_64-apple-darwin
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            lld_name: ld.lld.exe # Note: will be copied as rust-lld.exe in package
+            artifact_name: x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -144,18 +150,38 @@ jobs:
       - name: Run tests
         run: cargo test
 
-      - name: Install musl target for Rust
-        if: matrix.os == 'ubuntu-20.04'
-        run: rustup target add x86_64-unknown-linux-musl
+      - name: Install Rust target
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            rustup target add ${{ matrix.target }}
+          else
+            echo "No specific target in matrix, assuming native build."
+          fi
 
       - name: Build bam
-        if: matrix.os == 'ubuntu-20.04'
         env:
-          RUSTFLAGS: "-C target-feature=+crt-static"
-        run: cargo build --release --target x86_64-unknown-linux-musl
-      - name: Build bam
-        if: matrix.os != 'ubuntu-20.04'
-        run: cargo build --release
+          RUSTFLAGS: ${{ (matrix.target == 'x86_64-unknown-linux-musl' && '-C target-feature=+crt-static') || '' }}
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            cargo build --release --target ${{ matrix.target }}
+          else
+            cargo build --release
+          fi
+
+      - name: Determine Bam Executable Name and Path
+        id: bam_exe
+        shell: bash
+        run: |
+          BAM_EXE_NAME="bam"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && BAM_EXE_NAME="bam.exe"
+          echo "bam_exe_name=$BAM_EXE_NAME" >> $GITHUB_OUTPUT
+
+          if [[ -n "${{ matrix.target }}" ]]; then
+            SOURCE_BAM_PATH="target/${{ matrix.target }}/release/$BAM_EXE_NAME"
+          else
+            SOURCE_BAM_PATH="target/release/$BAM_EXE_NAME"
+          fi
+          echo "source_bam_path=$SOURCE_BAM_PATH" >> $GITHUB_OUTPUT
 
       - name: Extract rust-lld for bundling
         shell: bash
@@ -164,28 +190,27 @@ jobs:
           HOST_LIBDIR=$(rustc --print target-libdir)
           echo "Host lib dir: $HOST_LIBDIR"
           
-          # Find rust-lld in the host toolchain
+          # Determine LLD name for package (generic name)
+          PACKAGE_LLD_NAME="rust-lld"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && PACKAGE_LLD_NAME="rust-lld.exe"
+
+          # Find rust-lld in the host toolchain using matrix.lld_name as source
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RUST_LLD_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
+            RUST_LLD_PATH="$HOST_LIBDIR/../bin/${{ matrix.lld_name }}" # Should be ld.lld.exe
           else
-            RUST_LLD_PATH="$HOST_LIBDIR/../bin/rust-lld"
+            RUST_LLD_PATH="$HOST_LIBDIR/../bin/${{ matrix.lld_name }}" # Should be ld.lld
           fi
           
-          echo "Looking for rust-lld at: $RUST_LLD_PATH"
+          echo "Looking for rust-lld at: $RUST_LLD_PATH (using matrix.lld_name: ${{ matrix.lld_name }})"
           
           if [[ -f "$RUST_LLD_PATH" ]]; then
-            echo "Found rust-lld, copying to package"
+            echo "Found rust-lld, copying to package as $PACKAGE_LLD_NAME"
             mkdir -p package
-            cp "$RUST_LLD_PATH" "package/${{ matrix.lld_name }}"
+            cp "$RUST_LLD_PATH" "package/$PACKAGE_LLD_NAME"
             
-            # Copy bam executable  
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              cp "target/release/bam.exe" "package/"
-            elif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then
-              cp "target/x86_64-unknown-linux-musl/release/bam" "package/"
-            else
-              cp "target/release/bam" "package/"
-            fi
+            # Copy bam executable
+            echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to package/${{ steps.bam_exe.outputs.bam_exe_name }}"
+            cp "${{ steps.bam_exe.outputs.source_bam_path }}" "package/${{ steps.bam_exe.outputs.bam_exe_name }}"
             
             echo "Package contents:"
             ls -la package/
@@ -203,12 +228,15 @@ jobs:
           echo 'print(message: "Hello from release build!")' > test.bam
           
           # Test compilation
+          TEST_OUTPUT_EXE="test"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && TEST_OUTPUT_EXE="test.exe"
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            ./bam.exe test.bam
-            ./test.exe
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam
+            ./$TEST_OUTPUT_EXE
           else
-            ./bam test.bam
-            ./test
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam
+            ./$TEST_OUTPUT_EXE
           fi
 
       - name: Create package archive
@@ -308,9 +336,10 @@ jobs:
             ### Installation
             
             1. Download the appropriate package for your platform:
-               - **Linux**: `bam-${{ steps.release_details.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
-               - **macOS**: `bam-${{ steps.release_details.outputs.version }}-x86_64-apple-darwin.tar.gz`  
-               - **Windows**: `bam-${{ steps.release_details.outputs.version }}-x86_64-pc-windows-msvc.zip`
+               - **Linux (x86_64 musl)**: `bam-${{ steps.release_details.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
+               - **macOS (Apple Silicon, arm64)**: `bam-${{ steps.release_details.outputs.version }}-aarch64-apple-darwin.tar.gz`
+               - **macOS (Intel, x86_64)**: `bam-${{ steps.release_details.outputs.version }}-x86_64-apple-darwin.tar.gz`
+               - **Windows (x86_64 msvc)**: `bam-${{ steps.release_details.outputs.version }}-x86_64-pc-windows-msvc.zip`
             
             2. Extract the package:
                ```bash
@@ -398,10 +427,16 @@ jobs:
             "bam-${VERSION}-x86_64-unknown-linux-musl.tar.gz" \
             "application/gzip"
           
-          # Upload macOS package
+          # Upload macOS ARM package
           upload_asset \
             "./artifacts/release-aarch64-apple-darwin-${VERSION}/bam-${VERSION}-aarch64-apple-darwin.tar.gz" \
             "bam-${VERSION}-aarch64-apple-darwin.tar.gz" \
+            "application/gzip"
+
+          # Upload macOS Intel package
+          upload_asset \
+            "./artifacts/release-x86_64-apple-darwin-${VERSION}/bam-${VERSION}-x86_64-apple-darwin.tar.gz" \
+            "bam-${VERSION}-x86_64-apple-darwin.tar.gz" \
             "application/gzip"
           
           # Upload Windows package
