@@ -92,6 +92,7 @@ jobs:
           fi
 
       - name: Build bam
+        shell: bash # Ensure this runs in bash for all OSs, especially Windows
         env:
           RUSTFLAGS: ${{ (matrix.target == 'x86_64-unknown-linux-musl' && '-C target-feature=+crt-static') || '' }}
         run: |
