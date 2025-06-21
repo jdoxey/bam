@@ -4,8 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 
-#[cfg(target_os = "macos")]
-use std::os::unix;
+// Removed unused import std::os::unix; it was unused even on macOS
+// because std::os::unix::fs::symlink is called with its full path.
 
 mod codegen;
 
