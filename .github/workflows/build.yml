@@ -191,11 +191,45 @@ jobs:
             LLD_DEST_NAME="rust-lld" # Use consistent name for artifact
           fi
 
-          echo "Looking for rust-lld at: $RUST_LLD_ORIG_PATH"
+          # Determine the LLD path
+          # For x86_64-unknown-linux-musl, try to get the LLD from the MUSL toolchain's sysroot
+          if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-musl" ]]; then
+            echo "Attempting to find rust-lld for MUSL target..."
+            MUSL_SYSROOT=$(rustc --print sysroot --target x86_64-unknown-linux-musl)
+            CANDIDATE_MUSL_RUST_LLD_PATH="${MUSL_SYSROOT}/lib/rustlib/x86_64-unknown-linux-musl/bin/rust-lld" # Common location pattern
+
+            # Second common location pattern for toolchain binaries
+            CANDIDATE_MUSL_RUST_LLD_PATH_ALT="${MUSL_SYSROOT}/bin/rust-lld"
+
+            if [[ -f "$CANDIDATE_MUSL_RUST_LLD_PATH" ]]; then
+              RUST_LLD_ORIG_PATH="$CANDIDATE_MUSL_RUST_LLD_PATH"
+              echo "Found MUSL rust-lld at: $RUST_LLD_ORIG_PATH (via .../lib/rustlib/.../bin)"
+            elif [[ -f "$CANDIDATE_MUSL_RUST_LLD_PATH_ALT" ]]; then
+              RUST_LLD_ORIG_PATH="$CANDIDATE_MUSL_RUST_LLD_PATH_ALT"
+              echo "Found MUSL rust-lld at: $RUST_LLD_ORIG_PATH (via .../bin)"
+            else
+              echo "Warning: MUSL-specific rust-lld not found at expected paths. Falling back to host rust-lld."
+              # Fallback to host rust-lld (original logic)
+              if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+                RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
+              else
+                RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld"
+              fi
+            fi
+          else
+            # Original logic for non-MUSL Linux, macOS, Windows
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
+            else
+              RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld"
+            fi
+          fi
+
+          echo "Final selected rust-lld path: $RUST_LLD_ORIG_PATH"
+
           if [[ ! -f "$RUST_LLD_ORIG_PATH" ]]; then
-            echo "Error: rust-lld not found at $RUST_LLD_ORIG_PATH"
-            # Attempt to find lld if rust-lld is not present (e.g. system llvm)
-            # This is a fallback, rust-lld is preferred
+            echo "Error: rust-lld (or fallback) not found at $RUST_LLD_ORIG_PATH. Attempting system ld.lld."
+            # Attempt to find system ld.lld if our primary rust-lld isn't found
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
                 RUST_LLD_ORIG_PATH=$(where ld.lld.exe || true)
             else
@@ -203,15 +237,17 @@ jobs:
             fi
 
             if [[ ! -f "$RUST_LLD_ORIG_PATH" ]]; then
-                echo "Error: ld.lld also not found. Linker might be missing."
+                echo "Error: System ld.lld also not found. Linker might be missing."
                 exit 1
             else
-                echo "Found alternative lld at $RUST_LLD_ORIG_PATH"
+                echo "Found system ld.lld as fallback at $RUST_LLD_ORIG_PATH"
             fi
           fi
 
           echo "Copying $RUST_LLD_ORIG_PATH to $PACKAGE_DIR/$LLD_DEST_NAME"
           cp "$RUST_LLD_ORIG_PATH" "$PACKAGE_DIR/$LLD_DEST_NAME"
+          # Ensure it's executable
+          chmod +x "$PACKAGE_DIR/$LLD_DEST_NAME"
 
           echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to $PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
