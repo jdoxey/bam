@@ -17,3 +17,4 @@
 - Make a containing folder inside the zip (nobody likes to unzip a zip file and have the files mix with everything in the current directory)
 - Beta release always has '.1.'
 - The Beta releases come at the top of the 'Releases' list in GitHub. This will make it harder for people to easily find the 'latest stable release'.
+- Align jobs that get run in the different builds (make sure beta.yml, pr.yml and release.yml build processes are aligned).
