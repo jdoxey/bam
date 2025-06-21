@@ -22,10 +22,6 @@ jobs:
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
             target: aarch64-apple-darwin
-          - os: macos-latest
-            lld_name: ld.lld
-            artifact_name: x86_64-apple-darwin
-            target: x86_64-apple-darwin
           - os: windows-latest
             lld_name: ld.lld.exe
             artifact_name: x86_64-pc-windows-msvc
@@ -279,7 +275,6 @@ jobs:
             Download the appropriate package for your platform:
             - Linux (x86_64 musl): `bam-${{ steps.version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
             - macOS (Apple Silicon, arm64): `bam-${{ steps.version.outputs.version }}-aarch64-apple-darwin.tar.gz`
-            - macOS (Intel, x86_64): `bam-${{ steps.version.outputs.version }}-x86_64-apple-darwin.tar.gz`
             - Windows (x86_64 msvc): `bam-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.zip`
             
             ### Testing

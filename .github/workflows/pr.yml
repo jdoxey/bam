@@ -23,10 +23,6 @@ jobs:
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
             target: aarch64-apple-darwin
-          - os: macos-latest # Add Intel Mac
-            lld_name: ld.lld
-            artifact_name: x86_64-apple-darwin
-            target: x86_64-apple-darwin
           # - os: windows-latest
           #   lld_name: ld.lld.exe
           #   artifact_name: x86_64-pc-windows-msvc
