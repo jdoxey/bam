@@ -266,7 +266,7 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
         cmd.arg("-flavor")
             .arg("link") // Use MSVC linker interface
-            .arg(&format!("/out:{}", executable_name))
+            .arg(format!("/out:{}", executable_name))
             .arg(object_file) // Our object file
             .arg("/defaultlib:msvcrt") // Link against MSVC runtime
             .arg("/defaultlib:kernel32") // Link against kernel32
