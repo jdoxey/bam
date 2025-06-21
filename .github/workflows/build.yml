@@ -1,0 +1,310 @@
+name: Bam Builds
+
+on:
+  push:
+    branches-ignore:
+      - 'main'
+      - 'release/**'
+    # This will trigger for all branches except main and release branches,
+    # including 'develop' and any feature branches like 'feature/*' or 'hotfix/*'.
+  pull_request:
+    branches: [ develop ] # Also trigger for PRs specifically targeting develop for additional context if needed
+
+env:
+  CARGO_TERM_COLOR: always
+  # Determine if this is a 'develop' branch push (Beta) or other branch push (Alpha)
+  BUILD_TYPE: ${{ github.ref == 'refs/heads/develop' && 'beta' || 'alpha' }}
+
+jobs:
+  build:
+    name: ${{ env.BUILD_TYPE == 'beta' && 'Beta' || 'Alpha' }} Build (${{ matrix.artifact_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # Ensure all matrix jobs run even if one fails (especially for Alpha builds)
+      matrix:
+        include:
+          - os: ubuntu-latest
+            lld_name: ld.lld # Generic name for lld, actual file might be rust-lld
+            artifact_name: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-musl
+          - os: macos-latest
+            lld_name: ld.lld
+            artifact_name: aarch64-apple-darwin
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            lld_name: ld.lld.exe # Generic name for lld, actual file might be rust-lld.exe
+            artifact_name: x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for version calculation (beta count, branch name)
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ env.BUILD_TYPE }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}-${{ github.sha }} # Add SHA to key for more specific caching
+          restore-keys: |
+            ${{ runner.os }}-${{ env.BUILD_TYPE }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-${{ env.BUILD_TYPE }}-cargo-build-target-
+
+
+      - name: Determine Branch Name
+        id: branch_name
+        shell: bash
+        run: |
+          # GITHUB_HEAD_REF is only set for pull request events.
+          # For push events, GITHUB_REF_NAME contains the branch name.
+          if [[ -n "${{ github.head_ref }}" ]]; then
+            BRANCH_NAME="${{ github.head_ref }}"
+          else
+            BRANCH_NAME="${{ github.ref_name }}"
+          fi
+          # Sanitize branch name for use in versions/filenames (replace / with -)
+          SANITIZED_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          echo "branch_name=${SANITIZED_BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "Original branch name: $BRANCH_NAME"
+          echo "Sanitized branch name: $SANITIZED_BRANCH_NAME"
+
+      - name: Generate Version
+        id: version
+        shell: bash
+        run: |
+          BASE_VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          BUILD_VERSION=""
+
+          if [[ "${{ env.BUILD_TYPE }}" == "beta" ]]; then
+            # For Beta (develop branch)
+            BETA_COUNT=$(git rev-list --count ${{ github.ref_name }}) # Count commits on develop
+            BUILD_VERSION="${BASE_VERSION}-beta.${BETA_COUNT}.${SHORT_SHA}"
+            echo "Generated Beta version: ${BUILD_VERSION}"
+          else
+            # For Alpha (feature branches)
+            BRANCH_NAME_FROM_STEP="${{ steps.branch_name.outputs.branch_name }}"
+            # Using github.run_number as N for the build number
+            BUILD_NUMBER="${{ github.run_number }}"
+            BUILD_VERSION="${BASE_VERSION}-alpha.${BRANCH_NAME_FROM_STEP}.${BUILD_NUMBER}.${SHORT_SHA}"
+            echo "Generated Alpha version: ${BUILD_VERSION}"
+          fi
+          echo "version=${BUILD_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Update version in Cargo.toml
+        shell: bash
+        run: |
+          sed -i.bak "s/^version = \".*\"/version = \"${{ steps.version.outputs.version }}\"/" Cargo.toml
+          echo "Updated Cargo.toml version to: ${{ steps.version.outputs.version }}"
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Check Formatting
+        run: cargo fmt -- --check
+
+      - name: Install Rust target
+        shell: bash
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            rustup target add ${{ matrix.target }}
+          else
+            echo "No specific target in matrix, assuming native build."
+          fi
+
+      - name: Build bam
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ (matrix.target == 'x86_64-unknown-linux-musl' && '-C target-feature=+crt-static') || '' }}
+        run: |
+          if [[ -n "${{ matrix.target }}" ]]; then
+            cargo build --release --target ${{ matrix.target }}
+          else
+            cargo build --release
+          fi
+
+      - name: Determine Bam Executable Name and Path
+        id: bam_exe
+        shell: bash
+        run: |
+          BAM_EXE_NAME="bam"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && BAM_EXE_NAME="bam.exe"
+          echo "bam_exe_name=$BAM_EXE_NAME" >> $GITHUB_OUTPUT
+
+          if [[ -n "${{ matrix.target }}" ]]; then
+            SOURCE_BAM_PATH="target/${{ matrix.target }}/release/$BAM_EXE_NAME"
+          else
+            SOURCE_BAM_PATH="target/release/$BAM_EXE_NAME"
+          fi
+          echo "source_bam_path=$SOURCE_BAM_PATH" >> $GITHUB_OUTPUT
+
+      - name: Create package with rust-lld
+        shell: bash
+        run: |
+          HOST_LIBDIR=$(rustc --print target-libdir)
+          PACKAGE_DIR="package"
+          mkdir -p "$PACKAGE_DIR"
+
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
+            LLD_DEST_NAME="rust-lld.exe" # Use consistent name for artifact
+          else
+            RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld"
+            LLD_DEST_NAME="rust-lld" # Use consistent name for artifact
+          fi
+
+          echo "Looking for rust-lld at: $RUST_LLD_ORIG_PATH"
+          if [[ ! -f "$RUST_LLD_ORIG_PATH" ]]; then
+            echo "Error: rust-lld not found at $RUST_LLD_ORIG_PATH"
+            # Attempt to find lld if rust-lld is not present (e.g. system llvm)
+            # This is a fallback, rust-lld is preferred
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+                RUST_LLD_ORIG_PATH=$(where ld.lld.exe || true)
+            else
+                RUST_LLD_ORIG_PATH=$(which ld.lld || true)
+            fi
+
+            if [[ ! -f "$RUST_LLD_ORIG_PATH" ]]; then
+                echo "Error: ld.lld also not found. Linker might be missing."
+                exit 1
+            else
+                echo "Found alternative lld at $RUST_LLD_ORIG_PATH"
+            fi
+          fi
+
+          echo "Copying $RUST_LLD_ORIG_PATH to $PACKAGE_DIR/$LLD_DEST_NAME"
+          cp "$RUST_LLD_ORIG_PATH" "$PACKAGE_DIR/$LLD_DEST_NAME"
+
+          echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to $PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
+          cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
+
+          echo "Package contents:"
+          ls -la "$PACKAGE_DIR/"
+
+
+      - name: Test compilation end-to-end
+        shell: bash
+        run: |
+          cd package
+          TEST_MESSAGE="Hello from ${{ env.BUILD_TYPE }} build! Version: ${{ steps.version.outputs.version }}"
+          echo "print(message: \"$TEST_MESSAGE\")" > test.bam
+
+          echo "=== Testing object file generation ==="
+          export KEEP_OBJECT_FILE=1
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam 2>&1 || true
+            file test.o 2>/dev/null || echo "No test.o found or file command not available on Windows."
+          else
+            ./${{ steps.bam_exe.outputs.bam_exe_name }} test.bam 2>&1 || true
+            file test.o 2>/dev/null || echo "No test.o found or file command not available."
+          fi
+
+          echo "=== Testing executable run ==="
+          TEST_OUTPUT_EXE="test"
+          [[ "${{ matrix.os }}" == "windows-latest" ]] && TEST_OUTPUT_EXE="test.exe"
+          if [[ -f "$TEST_OUTPUT_EXE" ]]; then
+            echo "Running $TEST_OUTPUT_EXE:"
+            OUTPUT=$(./$TEST_OUTPUT_EXE)
+            echo "$OUTPUT"
+            if [[ "$OUTPUT" != "$TEST_MESSAGE" ]]; then
+              echo "Error: End-to-end test output mismatch!"
+              exit 1
+            fi
+          else
+            echo "$TEST_OUTPUT_EXE not found - compilation likely failed."
+            exit 1
+          fi
+
+      - name: Determine Archive Name
+        id: archive_details
+        shell: bash
+        run: |
+          VERSION_TAG="${{ steps.version.outputs.version }}"
+          ARTIFACT_SUFFIX="${{ matrix.artifact_name }}"
+
+          # For alpha builds, include the sanitized branch name in the zip for clarity, as requested
+          # The version tag already includes it, but this makes the downloadable zip explicit.
+          BRANCH_NAME_SUFFIX=""
+          if [[ "${{ env.BUILD_TYPE }}" == "alpha" ]]; then
+            BRANCH_NAME_SUFFIX="-${{ steps.branch_name.outputs.branch_name }}"
+          fi
+
+          ARCHIVE_BASENAME="bam-${VERSION_TAG}${BRANCH_NAME_SUFFIX}-${ARTIFACT_SUFFIX}"
+
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            ARCHIVE_FILENAME="${ARCHIVE_BASENAME}.zip"
+          else
+            ARCHIVE_FILENAME="${ARCHIVE_BASENAME}.tar.gz"
+          fi
+          echo "archive_filename=${ARCHIVE_FILENAME}" >> $GITHUB_OUTPUT
+          echo "Archive base name: ${ARCHIVE_BASENAME}"
+          echo "Archive filename: ${ARCHIVE_FILENAME}"
+
+      - name: Create Build Package
+        shell: bash
+        run: |
+          cd package
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            7z a "../${{ steps.archive_details.outputs.archive_filename }}" .
+          else
+            tar -czf "../${{ steps.archive_details.outputs.archive_filename }}" .
+          fi
+          cd ..
+          echo "Created package: ${{ steps.archive_details.outputs.archive_filename }}"
+          ls -la "${{ steps.archive_details.outputs.archive_filename }}"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BUILD_TYPE }}-build-${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}
+          path: ${{ steps.archive_details.outputs.archive_filename }}
+          if-no-files-found: error # Fail if the artifact isn't found
+          retention-days: ${{ (env.BUILD_TYPE == 'beta' && 30) || 7 }} # Longer retention for beta
+
+      - name: Restore Cargo.toml
+        if: always() # Always run this step
+        shell: bash
+        run: |
+          if [[ -f Cargo.toml.bak ]]; then
+            mv Cargo.toml.bak Cargo.toml
+            echo "Restored Cargo.toml"
+          else
+            echo "Cargo.toml.bak not found, skipping restore."
+          fi
+
+  build-summary:
+    name: Build Summary
+    needs: build
+    runs-on: ubuntu-latest
+    if: always() # Run even if builds fail to provide a summary
+
+    steps:
+      - name: Report build status
+        shell: bash
+        run: |
+          BUILD_TYPE_UPPER=$(echo "${{ env.BUILD_TYPE }}" | awk '{print toupper($0)}')
+          if [[ "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ All ${BUILD_TYPE_UPPER} builds completed successfully!"
+            echo "Artifacts are available in the build summary."
+          else
+            echo "❌ Some ${BUILD_TYPE_UPPER} builds failed. Please check the logs."
+            exit 1
+          fi

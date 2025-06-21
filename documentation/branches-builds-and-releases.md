@@ -22,19 +22,24 @@ The bam project uses a **GitLab Flow with environment branches** approach, combi
 
 We follow [Semantic Versioning 2.0.0](https://semver.org/) with the following pre-release identifiers:
 
-### Alpha Builds (`X.Y.Z-alpha.N`)
-- **Trigger**: Pull requests to `develop`
-- **Purpose**: Feature validation and integration testing
-- **Requirement**: Must pass before PR merge
-- **Audience**: Developers and CI/CD systems
-- **Example**: `0.2.0-alpha.1`, `0.2.0-alpha.2`
+### Alpha Builds (`X.Y.Z-alpha.BRANCH_NAME.N.COMMIT_SHA`)
+- **Trigger**: Pushes to any feature branch (e.g., `feature/*`, `hotfix/*`, or any branch that is not `develop`, `main`, or `release/*`). Typically associated with a Pull Request targeting `develop`.
+- **Purpose**: Feature validation, integration testing, and code quality checks.
+- **Output**: Build artifacts (e.g., compiled binaries) uploaded and stored with the workflow run. No GitHub Release is created.
+- **Versioning**: `N` is the GitHub Actions workflow run number for that build, providing an incrementing build counter for the branch.
+- **Requirement**: Must pass before PR merge.
+- **Audience**: Developers and CI/CD systems.
+- **Example**: `0.2.0-alpha.feature-new-parser.42.a1b2c3d` (where 42 is the workflow run number)
 
-### Beta Builds (`X.Y.Z-beta.N`)
-- **Trigger**: Commits to `develop` branch
-- **Purpose**: Integration testing and early user feedback
-- **Frequency**: Automatic on every commit
-- **Audience**: Internal testing and brave early adopters
-- **Example**: `0.2.0-beta.1`, `0.2.0-beta.2`
+### Beta Builds (`X.Y.Z-beta.N.COMMIT_SHA`)
+- **Trigger**: Commits to `develop` branch.
+- **Purpose**: Integration testing, code quality checks, and early user feedback on the latest `develop` state.
+- **Output**: Build artifacts (e.g., compiled binaries) uploaded and stored with the workflow run. No GitHub Release is created.
+- **Checks**: Includes compilation, tests, linting (Clippy), and formatting checks.
+- **Versioning**: `N` is the Git commit count on the `develop` branch.
+- **Frequency**: Automatic on every commit to `develop`.
+- **Audience**: Internal testing and brave early adopters.
+- **Example**: `0.2.0-beta.150.e4f5g6h` (where 150 is the commit count on `develop`)
 
 ### Release Candidates (`X.Y.Z-rc.N`)
 - **Trigger**: Manual builds from `release/X.Y` branches
@@ -64,20 +69,21 @@ git checkout -b feature/new-syntax
 ```
 
 ### Pull Request Validation
-1. **Automatic alpha build** created (`X.Y.Z-alpha.N`)
-2. **Required checks** must pass:
+1. **Automatic alpha build** triggered on push to feature branch (version `X.Y.Z-alpha.BRANCH_NAME.N.COMMIT_SHA`).
+2. **Build artifacts** generated and stored.
+3. **Required checks** must pass:
    - Compilation succeeds
    - All tests pass
-   - Code quality checks pass
-3. **Manual review** by maintainers
-4. **Merge** only after alpha build validation
+   - Code quality checks (clippy, formatting) pass
+4. **Manual review** by maintainers.
+5. **Merge** only after alpha build validation and successful checks.
 
-### Beta Release (Continuous)
+### Beta Builds (Continuous)
 ```bash
 # Every commit to develop triggers:
-# 1. Automatic beta build (X.Y.Z-beta.N)
-# 2. Artifact generation
-# 3. Optional deployment to staging environment
+# 1. Automatic beta build (X.Y.Z-beta.N.COMMIT_SHA)
+# 2. Artifact generation and storage
+# 3. Optional deployment to staging environment (if configured)
 ```
 
 ### Release Preparation
@@ -121,17 +127,15 @@ git push origin develop
 
 ### GitHub Actions Workflows
 
-#### PR Validation (`.github/workflows/pr.yml`)
-- Triggers on pull requests to `develop`
-- Creates alpha builds
-- Runs full test suite
-- Blocks merge if any checks fail
-
-#### Beta Builds (`.github/workflows/beta.yml`)
-- Triggers on commits to `develop`
-- Creates beta builds
-- Publishes artifacts for testing
-- Updates staging environments
+#### Alpha and Beta Builds (`.github/workflows/build.yml`)
+- Triggers on:
+    - Pushes to `develop` (for Beta builds)
+    - Pushes to any other branch (e.g., `feature/*`, `hotfix/*`, excluding `main`, `release/*`) (for Alpha builds)
+- Creates Alpha (`X.Y.Z-alpha.BRANCH_NAME.RUN_NUMBER.COMMIT_SHA`) or Beta (`X.Y.Z-beta.COMMIT_COUNT.COMMIT_SHA`) builds depending on the trigger.
+- Runs full test suite, linting (Clippy), and formatting checks for both Alpha and Beta builds.
+- Uploads build artifacts for both Alpha and Beta builds.
+- Blocks PR merge if Alpha build checks (including linting/formatting) fail.
+- Does **not** create GitHub Releases for Alpha or Beta builds.
 
 #### Release Builds (`.github/workflows/release.yml`)
 - Manual trigger for RC builds from release branches
