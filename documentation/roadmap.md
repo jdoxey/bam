@@ -18,3 +18,4 @@
 - Beta release always has '.1.'
 - The Beta releases come at the top of the 'Releases' list in GitHub. This will make it harder for people to easily find the 'latest stable release'.
 - Align jobs that get run in the different builds (make sure beta.yml, pr.yml and release.yml build processes are aligned).
+- Fix Apple workaround for print statement (hard coded length)
