@@ -94,10 +94,6 @@ jobs:
             lld_name: ld.lld
             artifact_name: aarch64-apple-darwin
             target: aarch64-apple-darwin
-          - os: macos-latest # Add Intel Mac
-            lld_name: ld.lld
-            artifact_name: x86_64-apple-darwin
-            target: x86_64-apple-darwin
           - os: windows-latest
             lld_name: ld.lld.exe # Note: will be copied as rust-lld.exe in package
             artifact_name: x86_64-pc-windows-msvc
@@ -340,7 +336,6 @@ jobs:
             1. Download the appropriate package for your platform:
                - **Linux (x86_64 musl)**: `bam-${{ steps.release_details.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
                - **macOS (Apple Silicon, arm64)**: `bam-${{ steps.release_details.outputs.version }}-aarch64-apple-darwin.tar.gz`
-               - **macOS (Intel, x86_64)**: `bam-${{ steps.release_details.outputs.version }}-x86_64-apple-darwin.tar.gz`
                - **Windows (x86_64 msvc)**: `bam-${{ steps.release_details.outputs.version }}-x86_64-pc-windows-msvc.zip`
             
             2. Extract the package:
@@ -433,12 +428,6 @@ jobs:
           upload_asset \
             "./artifacts/release-aarch64-apple-darwin-${VERSION}/bam-${VERSION}-aarch64-apple-darwin.tar.gz" \
             "bam-${VERSION}-aarch64-apple-darwin.tar.gz" \
-            "application/gzip"
-
-          # Upload macOS Intel package
-          upload_asset \
-            "./artifacts/release-x86_64-apple-darwin-${VERSION}/bam-${VERSION}-x86_64-apple-darwin.tar.gz" \
-            "bam-${VERSION}-x86_64-apple-darwin.tar.gz" \
             "application/gzip"
           
           # Upload Windows package
