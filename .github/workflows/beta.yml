@@ -87,6 +87,7 @@ jobs:
       - name: Install Rust target
         # Always run rustup target add, it's idempotent and quick if already installed.
         # Handles cases where matrix.target might be empty if we forget to add one.
+        shell: bash # Ensure this runs in bash for all OSs, especially Windows
         run: |
           if [[ -n "${{ matrix.target }}" ]]; then
             rustup target add ${{ matrix.target }}
