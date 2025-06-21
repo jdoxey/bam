@@ -191,45 +191,16 @@ jobs:
             LLD_DEST_NAME="rust-lld" # Use consistent name for artifact
           fi
 
-          # Determine the LLD path
-          # For x86_64-unknown-linux-musl, try to get the LLD from the MUSL toolchain's sysroot
-          if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-musl" ]]; then
-            echo "Attempting to find rust-lld for MUSL target..."
-            MUSL_SYSROOT=$(rustc --print sysroot --target x86_64-unknown-linux-musl)
-            CANDIDATE_MUSL_RUST_LLD_PATH="${MUSL_SYSROOT}/lib/rustlib/x86_64-unknown-linux-musl/bin/rust-lld" # Common location pattern
-
-            # Second common location pattern for toolchain binaries
-            CANDIDATE_MUSL_RUST_LLD_PATH_ALT="${MUSL_SYSROOT}/bin/rust-lld"
-
-            if [[ -f "$CANDIDATE_MUSL_RUST_LLD_PATH" ]]; then
-              RUST_LLD_ORIG_PATH="$CANDIDATE_MUSL_RUST_LLD_PATH"
-              echo "Found MUSL rust-lld at: $RUST_LLD_ORIG_PATH (via .../lib/rustlib/.../bin)"
-            elif [[ -f "$CANDIDATE_MUSL_RUST_LLD_PATH_ALT" ]]; then
-              RUST_LLD_ORIG_PATH="$CANDIDATE_MUSL_RUST_LLD_PATH_ALT"
-              echo "Found MUSL rust-lld at: $RUST_LLD_ORIG_PATH (via .../bin)"
-            else
-              echo "Warning: MUSL-specific rust-lld not found at expected paths. Falling back to host rust-lld."
-              # Fallback to host rust-lld (original logic)
-              if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-                RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
-              else
-                RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld"
-              fi
-            fi
+          # Determine the path to the host toolchain's rust-lld
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
           else
-            # Original logic for non-MUSL Linux, macOS, Windows
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld.exe"
-            else
-              RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld"
-            fi
+            RUST_LLD_ORIG_PATH="$HOST_LIBDIR/../bin/rust-lld"
           fi
-
-          echo "Final selected rust-lld path: $RUST_LLD_ORIG_PATH"
+          echo "Host toolchain rust-lld path: $RUST_LLD_ORIG_PATH"
 
           if [[ ! -f "$RUST_LLD_ORIG_PATH" ]]; then
-            echo "Error: rust-lld (or fallback) not found at $RUST_LLD_ORIG_PATH. Attempting system ld.lld."
-            # Attempt to find system ld.lld if our primary rust-lld isn't found
+            echo "Error: Host rust-lld not found at $RUST_LLD_ORIG_PATH. Attempting system ld.lld as fallback."
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
                 RUST_LLD_ORIG_PATH=$(where ld.lld.exe || true)
             else
@@ -244,10 +215,21 @@ jobs:
             fi
           fi
 
-          echo "Copying $RUST_LLD_ORIG_PATH to $PACKAGE_DIR/$LLD_DEST_NAME"
-          cp "$RUST_LLD_ORIG_PATH" "$PACKAGE_DIR/$LLD_DEST_NAME"
-          # Ensure it's executable
-          chmod +x "$PACKAGE_DIR/$LLD_DEST_NAME"
+          # For Linux and macOS, create a symlink to the host toolchain LLD.
+          # For Windows, copy the LLD.
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo "Copying $RUST_LLD_ORIG_PATH to $PACKAGE_DIR/$LLD_DEST_NAME"
+            cp "$RUST_LLD_ORIG_PATH" "$PACKAGE_DIR/$LLD_DEST_NAME"
+          else
+            echo "Creating symlink from $RUST_LLD_ORIG_PATH to $PACKAGE_DIR/$LLD_DEST_NAME"
+            ln -sf "$RUST_LLD_ORIG_PATH" "$PACKAGE_DIR/$LLD_DEST_NAME"
+          fi
+          # Ensure the copied/symlinked lld in package is executable if it's a real file (symlinks inherit permissions)
+          # For a symlink, chmod affects the target, but it's good practice for the copy case.
+          # The original symlink target should already be executable.
+          if [[ -f "$PACKAGE_DIR/$LLD_DEST_NAME" && ! -L "$PACKAGE_DIR/$LLD_DEST_NAME" ]]; then
+            chmod +x "$PACKAGE_DIR/$LLD_DEST_NAME"
+          fi
 
           echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to $PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
