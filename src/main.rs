@@ -81,9 +81,9 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
         https://github.com/jdoxey/bam/releases\n\
         \n\
         Searched for:\n\
-        - Bundled rust-lld at: {}\n\
-        - Rust toolchain rust-lld",
-        get_bundled_lld_path().display()
+        - Bundled lld at: {}\n\
+        - Rust toolchain rust-lld", // Fallback to rust-lld from toolchain is still okay if bundled 'lld' is not found
+        get_bundled_lld_path().display() // This will now display .../lld or .../lld.exe
     ))
 }
 
@@ -92,17 +92,17 @@ fn get_bundled_lld_path() -> PathBuf {
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             if cfg!(target_os = "windows") {
-                return exe_dir.join("rust-lld.exe");
+                return exe_dir.join("lld.exe"); // Changed to lld.exe
             } else {
-                return exe_dir.join("rust-lld");
+                return exe_dir.join("lld");     // Changed to lld
             }
         }
     }
     // fallback
     if cfg!(target_os = "windows") {
-        PathBuf::from("rust-lld.exe")
+        PathBuf::from("lld.exe") // Changed to lld.exe
     } else {
-        PathBuf::from("rust-lld")
+        PathBuf::from("lld")     // Changed to lld
     }
 }
 

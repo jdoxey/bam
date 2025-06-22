@@ -203,16 +203,17 @@ jobs:
           mkdir -p "$PACKAGE_DIR"
 
           # Determine LLD source and final name in package
-          PACKAGED_LLD_NAME="ld.lld" # Consistent name
+          # Bam compiler (after source changes) will expect 'lld' or 'lld.exe'.
+          PACKAGED_LLD_NAME="lld"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            PACKAGED_LLD_NAME="ld.lld.exe"
+            PACKAGED_LLD_NAME="lld.exe"
           fi
 
           if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
             LLVM_EXTRACT_DIR="llvm_extracted"
-            STANDALONE_LLD_PATH="${LLVM_EXTRACT_DIR}/bin/lld"
-            echo "Using standalone LLD from ${STANDALONE_LLD_PATH} for macOS"
-            cp "${STANDALONE_LLD_PATH}" "$PACKAGE_DIR/${PACKAGED_LLD_NAME}"
+            STANDALONE_LLD_PATH="${LLVM_EXTRACT_DIR}/bin/lld" # This is the downloaded LLVM lld
+            echo "Using standalone LLD from ${STANDALONE_LLD_PATH} for macOS, packaging as $PACKAGED_LLD_NAME"
+            cp "${STANDALONE_LLD_PATH}" "$PACKAGE_DIR/${PACKAGED_LLD_NAME}" # Package it as lld
           else
             # For Linux and Windows, use LLD from host toolchain
             HOST_LIBDIR=$(rustc --print target-libdir)
@@ -269,8 +270,8 @@ jobs:
           ls -la "$PACKAGE_DIR/"
 
           if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
-            echo "Verifying dynamic dependencies of packaged ld.lld on macOS:"
-            otool -L "$PACKAGE_DIR/ld.lld"
+            echo "Verifying dynamic dependencies of packaged linker on macOS:"
+            otool -L "$PACKAGE_DIR/lld" # Check package/lld for macOS
           fi
 
 
