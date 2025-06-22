@@ -92,17 +92,17 @@ fn get_bundled_lld_path() -> PathBuf {
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             if cfg!(target_os = "windows") {
-                return exe_dir.join("lld.exe"); // Changed to lld.exe
+                return exe_dir.join("lld.exe");
             } else {
-                return exe_dir.join("lld");     // Changed to lld
+                return exe_dir.join("lld");
             }
         }
     }
     // fallback
     if cfg!(target_os = "windows") {
-        PathBuf::from("lld.exe") // Changed to lld.exe
+        PathBuf::from("lld.exe")
     } else {
-        PathBuf::from("lld")     // Changed to lld
+        PathBuf::from("lld")
     }
 }
 
