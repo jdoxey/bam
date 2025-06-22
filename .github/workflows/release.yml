@@ -218,48 +218,49 @@ jobs:
             echo "Using standalone LLD from ${STANDALONE_LLD_PATH} for macOS"
             cp "${STANDALONE_LLD_PATH}" "package/${PACKAGED_LLD_NAME}"
           else
-          else
             # For Linux and Windows, use LLD from host toolchain
             HOST_LIBDIR=$(rustc --print target-libdir)
             echo "Host lib dir: $HOST_LIBDIR"
 
-            # Determine the actual LLD executable name provided by Rust toolchain
-            # For Linux, it's typically 'rust-lld'. For Windows, it's 'rust-lld.exe'.
-            # The matrix.lld_name is currently 'ld.lld' or 'ld.lld.exe', which caused the issue.
-            # We should look for 'rust-lld' or 'rust-lld.exe' from the toolchain.
             ACTUAL_RUST_LLD_EXEC_NAME="rust-lld"
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
               ACTUAL_RUST_LLD_EXEC_NAME="rust-lld.exe"
             fi
-            HOST_LLD_PATH="$HOST_LIBDIR/../bin/$ACTUAL_RUST_LLD_EXEC_NAME"
+            HOST_LLD_PATH_PRIMARY="$HOST_LIBDIR/../bin/$ACTUAL_RUST_LLD_EXEC_NAME"
 
-            echo "Looking for host LLD at: $HOST_LLD_PATH"
-            if [[ ! -f "$HOST_LLD_PATH" ]]; then
-              # Fallback for Windows: matrix.lld_name might be ld.lld.exe, which could be found by 'where'
-              # For Linux, this fallback is less likely to succeed if rust-lld isn't in the primary path.
-              echo "Host LLD $ACTUAL_RUST_LLD_EXEC_NAME not found at $HOST_LLD_PATH. Attempting fallback with ${{ matrix.lld_name }}."
+            echo "Attempting to find host LLD at primary path: $HOST_LLD_PATH_PRIMARY"
+            if [[ -f "$HOST_LLD_PATH_PRIMARY" ]]; then
+              HOST_LLD_PATH="$HOST_LLD_PATH_PRIMARY"
+              echo "Found host LLD at primary path: $HOST_LLD_PATH"
+            else
+              echo "Host LLD $ACTUAL_RUST_LLD_EXEC_NAME not found at $HOST_LLD_PATH_PRIMARY. Attempting fallback search using 'which'/'where'."
               if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-                  HOST_LLD_PATH=$(where ${{ matrix.lld_name }} || true)
+                HOST_LLD_PATH_FALLBACK=$(where $ACTUAL_RUST_LLD_EXEC_NAME 2>/dev/null || true)
               else
-                  # For Linux, if rust-lld isn't in the expected place, `which ld.lld` is unlikely to be what we want from the toolchain.
-                  # The original error showed `which ld.lld` also failed.
-                  # Prioritizing the direct rust-lld from toolchain. If that fails, this is a genuine problem.
-                  HOST_LLD_PATH=$(which ${{ matrix.lld_name }} || true) # This was the problematic fallback
-                  # A better fallback for Linux might be to try `which rust-lld` if the direct path fails
-                  if [[ ! -f "$HOST_LLD_PATH" ]]; then
-                    echo "Fallback with ${{ matrix.lld_name }} via which also failed. Trying 'which rust-lld'."
-                    HOST_LLD_PATH=$(which rust-lld || true)
-                  fi
+                HOST_LLD_PATH_FALLBACK=$(which $ACTUAL_RUST_LLD_EXEC_NAME 2>/dev/null || true)
               fi
 
-              if [[ ! -f "$HOST_LLD_PATH" ]]; then
-                  echo "Error: Host LLD also not found after fallbacks. Linker might be missing."
-                  exit 1
+              if [[ -f "$HOST_LLD_PATH_FALLBACK" ]]; then
+                HOST_LLD_PATH="$HOST_LLD_PATH_FALLBACK"
+                echo "Found host LLD ($ACTUAL_RUST_LLD_EXEC_NAME) via 'which'/'where' fallback: $HOST_LLD_PATH"
               else
-                  echo "Found system LLD as fallback at $HOST_LLD_PATH"
+                echo "Fallback for $ACTUAL_RUST_LLD_EXEC_NAME via 'which'/'where' failed. Attempting final fallback with matrix.lld_name: ${{ matrix.lld_name }}."
+                if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+                  HOST_LLD_PATH_FINAL_FALLBACK=$(where ${{ matrix.lld_name }} 2>/dev/null || true)
+                else
+                  HOST_LLD_PATH_FINAL_FALLBACK=$(which ${{ matrix.lld_name }} 2>/dev/null || true)
+                fi
+
+                if [[ -f "$HOST_LLD_PATH_FINAL_FALLBACK" ]]; then
+                  HOST_LLD_PATH="$HOST_LLD_PATH_FINAL_FALLBACK"
+                  echo "Found LLD using ${{ matrix.lld_name }} via 'which'/'where' as final fallback: $HOST_LLD_PATH"
+                else
+                  echo "Error: Host LLD could not be found after all primary and fallback attempts. Searched for $ACTUAL_RUST_LLD_EXEC_NAME and ${{ matrix.lld_name }}."
+                  exit 1
+                fi
               fi
             fi
-            echo "Found host LLD, copying $HOST_LLD_PATH to package as $PACKAGED_LLD_NAME"
+            echo "Using LLD from $HOST_LLD_PATH, copying to package as $PACKAGED_LLD_NAME"
             cp "$HOST_LLD_PATH" "package/${PACKAGED_LLD_NAME}"
           fi
           
