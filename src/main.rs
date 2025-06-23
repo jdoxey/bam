@@ -95,7 +95,8 @@ fn get_bundled_lld_path() -> PathBuf {
                 return exe_dir.join("lld.exe");
             } else if cfg!(target_os = "linux") {
                 return exe_dir.join("ld.lld"); // Specific for Linux
-            } else { // Other Unix (macOS)
+            } else {
+                // Other Unix (macOS)
                 return exe_dir.join("lld");
             }
         }
@@ -104,8 +105,10 @@ fn get_bundled_lld_path() -> PathBuf {
     if cfg!(target_os = "windows") {
         PathBuf::from("lld.exe")
     } else if cfg!(target_os = "linux") {
-        PathBuf::from("ld.lld") // Specific for Linux
-    } else { // Other Unix (macOS)
+        // Specific for Linux
+        PathBuf::from("ld.lld")
+    } else {
+        // Other Unix (macOS)
         PathBuf::from("lld")
     }
 }
