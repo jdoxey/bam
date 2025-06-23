@@ -181,102 +181,74 @@ jobs:
           fi
           echo "source_bam_path=$SOURCE_BAM_PATH" >> $GITHUB_OUTPUT
 
-      - name: Download and Extract Standalone LLD (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Setup LLD Download Information
+        id: lld_info
         shell: bash
         run: |
-          LLVM_VERSION="17.0.6"
-          LLVM_ARCH="arm64-apple-darwin22.0" # Corrected specific architecture string
-          LLVM_TARBALL="clang+llvm-${LLVM_VERSION}-${LLVM_ARCH}.tar.xz"
-          LLVM_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/${LLVM_TARBALL}"
-          LLVM_EXTRACT_DIR="llvm_extracted"
+          LLVM_EXTRACT_DIR="llvm_downloaded"
+          mkdir -p "$LLVM_EXTRACT_DIR"
+          echo "LLVM_EXTRACT_DIR=$LLVM_EXTRACT_DIR" >> $GITHUB_ENV
 
-          echo "Downloading ${LLVM_URL}"
-          curl -L -o "${LLVM_TARBALL}" "${LLVM_URL}"
-          
-          echo "Extracting ${LLVM_TARBALL}"
-          mkdir -p "${LLVM_EXTRACT_DIR}"
-          tar -xf "${LLVM_TARBALL}" -C "${LLVM_EXTRACT_DIR}" --strip-components=1
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
+            echo "LLVM_TARBALL_NAME=clang+llvm-20.1.1-x86_64-pc-windows-msvc.tar.xz" >> $GITHUB_ENV
+            echo "LLVM_DOWNLOAD_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.1/clang+llvm-20.1.1-x86_64-pc-windows-msvc.tar.xz" >> $GITHUB_ENV
+            echo "LLVM_BIN_SUBPATH=clang+llvm-20.1.1-x86_64-pc-windows-msvc/bin" >> $GITHUB_ENV
+            echo "EXTRACTED_LLD_NAME=lld.exe" >> $GITHUB_ENV
+            echo "PACKAGED_LLD_NAME=lld.exe" >> $GITHUB_ENV
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
+            echo "LLVM_TARBALL_NAME=LLVM-20.1.1-macOS-ARM64.tar.xz" >> $GITHUB_ENV
+            echo "LLVM_DOWNLOAD_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.1/LLVM-20.1.1-macOS-ARM64.tar.xz" >> $GITHUB_ENV
+            echo "LLVM_BIN_SUBPATH=LLVM-20.1.1-macOS-ARM64/bin" >> $GITHUB_ENV
+            echo "EXTRACTED_LLD_NAME=lld" >> $GITHUB_ENV
+            echo "PACKAGED_LLD_NAME=lld" >> $GITHUB_ENV
+          elif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then # Linux
+            echo "LLVM_VERSION_ID=static-clang-v20.1.1" >> $GITHUB_ENV
+            echo "LLVM_TARBALL_NAME=linux_amd64.tar.xz" >> $GITHUB_ENV
+            echo "LLVM_DOWNLOAD_URL=https://github.com/dzbarsky/static-clang/releases/download/v20.1.1/linux_amd64.tar.xz" >> $GITHUB_ENV
+            echo "LLVM_BIN_SUBPATH=bin" >> $GITHUB_ENV # Assumes bin/lld is at top level after extraction
+            echo "EXTRACTED_LLD_NAME=lld" >> $GITHUB_ENV
+            echo "PACKAGED_LLD_NAME=ld.lld" >> $GITHUB_ENV # Specific name for Linux as per request
+          fi
 
-          echo "Standalone LLD path: ${LLVM_EXTRACT_DIR}/bin/lld"
-          ls -l "${LLVM_EXTRACT_DIR}/bin/lld"
+      - name: Cache LLVM Tarball
+        uses: actions/cache@v4
+        id: cache_llvm_tarball
+        with:
+          path: ./${{ env.LLVM_TARBALL_NAME }}
+          key: ${{ runner.os }}-${{ env.LLVM_VERSION_ID }}-${{ env.LLVM_TARBALL_NAME }}
 
-      - name: Package LLD and bam executable
+      - name: Download LLVM Tarball
+        if: steps.cache_llvm_tarball.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          echo "Downloading ${{ env.LLVM_DOWNLOAD_URL }} to ${{ env.LLVM_TARBALL_NAME }}"
+          curl -L -o "${{ env.LLVM_TARBALL_NAME }}" "${{ env.LLVM_DOWNLOAD_URL }}"
+
+      - name: Extract and Package LLD
         shell: bash
         run: |
           mkdir -p package
+          echo "Extracting ${{ env.LLVM_TARBALL_NAME }} into ${{ env.LLVM_EXTRACT_DIR }}"
+          tar -xf "${{ env.LLVM_TARBALL_NAME }}" -C "${{ env.LLVM_EXTRACT_DIR }}"
 
-          # Determine LLD source and final name in package
-          # Bam compiler (after source changes) will expect 'lld' or 'lld.exe'.
-          PACKAGED_LLD_NAME="lld"
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            PACKAGED_LLD_NAME="lld.exe"
-          fi
-
-          if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
-            LLVM_EXTRACT_DIR="llvm_extracted"
-            STANDALONE_LLD_PATH="${LLVM_EXTRACT_DIR}/bin/lld" # This is the downloaded LLVM lld
-            echo "Using standalone LLD from ${STANDALONE_LLD_PATH} for macOS, packaging as ${PACKAGED_LLD_NAME}"
-            cp "${STANDALONE_LLD_PATH}" "package/${PACKAGED_LLD_NAME}" # Package it as lld
-          else
-            # For Linux and Windows, use LLD from host toolchain
-            HOST_LIBDIR=$(rustc --print target-libdir)
-            echo "Host lib dir: $HOST_LIBDIR"
-
-            ACTUAL_RUST_LLD_EXEC_NAME="rust-lld"
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              ACTUAL_RUST_LLD_EXEC_NAME="rust-lld.exe"
-            fi
-            HOST_LLD_PATH_PRIMARY="$HOST_LIBDIR/../bin/$ACTUAL_RUST_LLD_EXEC_NAME"
-
-            echo "Attempting to find host LLD at primary path: $HOST_LLD_PATH_PRIMARY"
-            if [[ -f "$HOST_LLD_PATH_PRIMARY" ]]; then
-              HOST_LLD_PATH="$HOST_LLD_PATH_PRIMARY"
-              echo "Found host LLD at primary path: $HOST_LLD_PATH"
-            else
-              echo "Host LLD $ACTUAL_RUST_LLD_EXEC_NAME not found at $HOST_LLD_PATH_PRIMARY. Attempting fallback search using 'which'/'where'."
-              if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-                HOST_LLD_PATH_FALLBACK=$(where $ACTUAL_RUST_LLD_EXEC_NAME 2>/dev/null || true)
-              else
-                HOST_LLD_PATH_FALLBACK=$(which $ACTUAL_RUST_LLD_EXEC_NAME 2>/dev/null || true)
-              fi
-
-              if [[ -f "$HOST_LLD_PATH_FALLBACK" ]]; then
-                HOST_LLD_PATH="$HOST_LLD_PATH_FALLBACK"
-                echo "Found host LLD ($ACTUAL_RUST_LLD_EXEC_NAME) via 'which'/'where' fallback: $HOST_LLD_PATH"
-              else
-                echo "Fallback for $ACTUAL_RUST_LLD_EXEC_NAME via 'which'/'where' failed. Attempting final fallback with matrix.lld_name: ${{ matrix.lld_name }}."
-                if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-                  HOST_LLD_PATH_FINAL_FALLBACK=$(where ${{ matrix.lld_name }} 2>/dev/null || true)
-                else
-                  HOST_LLD_PATH_FINAL_FALLBACK=$(which ${{ matrix.lld_name }} 2>/dev/null || true)
-                fi
-
-                if [[ -f "$HOST_LLD_PATH_FINAL_FALLBACK" ]]; then
-                  HOST_LLD_PATH="$HOST_LLD_PATH_FINAL_FALLBACK"
-                  echo "Found LLD using ${{ matrix.lld_name }} via 'which'/'where' as final fallback: $HOST_LLD_PATH"
-                else
-                  echo "Error: Host LLD could not be found after all primary and fallback attempts. Searched for $ACTUAL_RUST_LLD_EXEC_NAME and ${{ matrix.lld_name }}."
-                  exit 1
-                fi
-              fi
-            fi
-            echo "Using LLD from $HOST_LLD_PATH, copying to package as $PACKAGED_LLD_NAME"
-            cp "$HOST_LLD_PATH" "package/${PACKAGED_LLD_NAME}"
-          fi
+          SOURCE_LLD_PATH="${{ env.LLVM_EXTRACT_DIR }}/${{ env.LLVM_BIN_SUBPATH }}/${{ env.EXTRACTED_LLD_NAME }}"
+          DEST_LLD_PATH="package/${{ env.PACKAGED_LLD_NAME }}"
           
-          chmod +x "package/${PACKAGED_LLD_NAME}"
+          echo "Copying LLD from ${SOURCE_LLD_PATH} to ${DEST_LLD_PATH}"
+          cp "${SOURCE_LLD_PATH}" "${DEST_LLD_PATH}"
+          chmod +x "${DEST_LLD_PATH}"
 
-          # Copy bam executable
-          echo "Copying ${{ steps.bam_exe.outputs.source_bam_path }} to package/${{ steps.bam_exe.outputs.bam_exe_name }}"
+          echo "Copying bam executable to package"
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "package/${{ steps.bam_exe.outputs.bam_exe_name }}"
           
           echo "Package contents:"
           ls -la package/
 
           if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
-            echo "Verifying dynamic dependencies of packaged ld.lld on macOS:"
-            otool -L "package/ld.lld"
+            echo "Verifying dynamic dependencies of packaged LLD on macOS:"
+            otool -L "package/${{ env.PACKAGED_LLD_NAME }}" # Should be package/lld
           fi
 
       - name: Test compilation end-to-end
