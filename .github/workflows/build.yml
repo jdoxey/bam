@@ -336,7 +336,7 @@ jobs:
             }
           }
 
-          Write-Host "Contents of $PackageLibDir:"
+          Write-Host "Contents of ${PackageLibDir}:"
           Get-ChildItem -Path $PackageLibDir | ForEach-Object { Write-Host $_.Name }
 
       - name: Test compilation end-to-end
