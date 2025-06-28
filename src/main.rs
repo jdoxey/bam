@@ -246,13 +246,13 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("gnu") // Use GNU ld-compatible interface
             .arg("-o")
             .arg(executable_name)
-            .arg(format!("/usr/lib/{}/crt1.o", lib_dir)) // C runtime startup
-            .arg(format!("/usr/lib/{}/crti.o", lib_dir)) // C runtime init
+            .arg(format!("/usr/lib/{lib_dir}/crt1.o")) // C runtime startup
+            .arg(format!("/usr/lib/{lib_dir}/crti.o")) // C runtime init
             .arg(object_file) // Our object file
-            .arg(format!("/usr/lib/{}/crtn.o", lib_dir)) // C runtime finish
+            .arg(format!("/usr/lib/{lib_dir}/crtn.o")) // C runtime finish
             .arg("-lc") // Link against libc
-            .arg(format!("-L/usr/lib/{}", lib_dir)) // Add library search path
-            .arg(format!("-L/lib/{}", lib_dir)) // Add another library search path
+            .arg(format!("-L/usr/lib/{lib_dir}")) // Add library search path
+            .arg(format!("-L/lib/{lib_dir}")) // Add another library search path
             .arg("-L/lib64") // Add lib64 path
             .arg("-dynamic-linker")
             .arg(linker_path); // Set dynamic linker path
