@@ -75,7 +75,7 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
     // 3. No LLD found - provide helpful error message
     Err(format!(
         "No LLD linker found.\n\
-        \n\
+        \n
         For development: Ensure Rust is properly installed via rustup.\n\
         For distribution: Re-download the complete bam package from:\n\
         https://github.com/jdoxey/bam/releases\n\
@@ -136,7 +136,7 @@ fn get_rust_lld() -> Result<PathBuf, String> {
         .arg("--print")
         .arg("target-libdir")
         .output()
-        .map_err(|e| format!("Failed to run rustc: {}", e))?;
+        .map_err(|e| format!("Failed to run rustc: {e}"))?;
 
     if !output.status.success() {
         return Err("rustc command failed".to_string());
@@ -220,10 +220,10 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!(
-                "ld64.lld linking failed: {}\n\n\
+                "ld64.lld linking failed: {}\n\n
                 On macOS, bam requires Xcode Command Line Tools to be installed.\n\
                 Install them with: xcode-select --install\n\
-                \n\
+                \n
                 Alternatively, you can install LLVM via Homebrew: brew install llvm",
                 stderr
             ));
@@ -259,11 +259,11 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
         let output = cmd
             .output()
-            .map_err(|e| format!("Failed to execute LLD: {}", e))?;
+            .map_err(|e| format!("Failed to execute LLD: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("LLD linking failed: {}", stderr));
+            return Err(format!("LLD linking failed: {stderr}"));
         }
     }
 
@@ -273,7 +273,7 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
         cmd.arg("-flavor")
             .arg("link") // Use MSVC linker interface
-            .arg(format!("/out:{}", executable_name))
+            .arg(format!("/out:{executable_name}"))
             .arg(object_file) // Our object file
             .arg("/defaultlib:msvcrt") // Link against MSVC runtime
             .arg("/defaultlib:kernel32") // Link against kernel32
@@ -281,11 +281,11 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
         let output = cmd
             .output()
-            .map_err(|e| format!("Failed to execute LLD: {}", e))?;
+            .map_err(|e| format!("Failed to execute LLD: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("LLD linking failed: {}", stderr));
+            return Err(format!("LLD linking failed: {stderr}"));
         }
     }
 
@@ -304,7 +304,7 @@ fn main() {
     let input_path = Path::new(input_file);
 
     if !input_path.exists() {
-        eprintln!("Error: File '{}' not found", input_file);
+        eprintln!("Error: File '{input_file}' not found");
         process::exit(1);
     }
 
@@ -317,7 +317,7 @@ fn main() {
     let source_code = match fs::read_to_string(input_file) {
         Ok(content) => content,
         Err(e) => {
-            eprintln!("Error reading file '{}': {}", input_file, e);
+            eprintln!("Error reading file '{input_file}': {e}");
             process::exit(1);
         }
     };
@@ -342,7 +342,7 @@ fn main() {
     }
 
     if statements.is_empty() {
-        eprintln!("Error: No valid statements found in '{}'", input_file);
+        eprintln!("Error: No valid statements found in '{input_file}'");
         process::exit(1);
     }
 
@@ -357,7 +357,7 @@ fn main() {
 
     // Generate output filename (replace .bam with .o)
     let output_name = input_file.replace(".bam", "");
-    let object_file = format!("{}.o", output_name);
+    let object_file = format!("{output_name}.o");
 
     // Write object file
     match fs::write(&object_file, &object_bytes) {
@@ -367,27 +367,27 @@ fn main() {
             object_bytes.len()
         ),
         Err(e) => {
-            eprintln!("Error writing object file '{}': {}", object_file, e);
+            eprintln!("Error writing object file '{object_file}': {e}");
             process::exit(1);
         }
     }
 
     // Link to create executable
     let executable_name = if cfg!(target_os = "windows") {
-        format!("{}.exe", output_name)
+        format!("{output_name}.exe")
     } else {
         output_name.clone()
     };
     match link_executable(&object_file, &executable_name) {
         Ok(_) => {
-            println!("Generated executable: {}", executable_name);
+            println!("Generated executable: {executable_name}");
             // Clean up object file (skip cleanup if KEEP_OBJECT_FILE env var is set)
             if env::var("KEEP_OBJECT_FILE").is_err() {
                 let _ = fs::remove_file(&object_file);
             }
         }
         Err(e) => {
-            eprintln!("Error linking executable '{}': {}", executable_name, e);
+            eprintln!("Error linking executable '{executable_name}': {e}");
             process::exit(1);
         }
     }

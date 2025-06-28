@@ -53,7 +53,7 @@ impl CodeGenerator {
         };
 
         let isa_builder = cranelift_codegen::isa::lookup(target_triple.parse().unwrap())
-            .map_err(|e| format!("Failed to find ISA for {}: {}", target_triple, e))
+            .map_err(|e| format!("Failed to find ISA for {target_triple}: {e}"))
             .unwrap();
         let isa = isa_builder
             .finish(settings::Flags::new(flag_builder))
