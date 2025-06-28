@@ -280,7 +280,8 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg(object_file) // Our object file
             .arg("/defaultlib:msvcrt") // Link against MSVC runtime
             .arg("/defaultlib:kernel32") // Link against kernel32
-            .arg("/subsystem:console"); // Console application
+            .arg("/subsystem:console") // Console application
+            .arg("/libpath:./lib"); // Add bundled lib directory
 
         let output = cmd
             .output()
