@@ -256,52 +256,82 @@ jobs:
         shell: pwsh # Using PowerShell for better path manipulation on Windows
         run: |
           $ErrorActionPreference = "Stop"
+          $PackageDir = "package" # As defined in the previous step for build.yml, or "package" for release.yml
 
-          # Create the package/lib directory
-          $PackageLibDir = Join-Path -Path "package" -ChildPath "lib"
+          $PackageLibDir = Join-Path -Path $PackageDir -ChildPath "lib"
+          if (Test-Path $PackageLibDir) {
+              Write-Host "Removing existing directory: $PackageLibDir to ensure clean state."
+              Remove-Item -Recurse -Force -Path $PackageLibDir
+          }
           New-Item -ItemType Directory -Path $PackageLibDir -Force | Out-Null
-          Write-Host "Created directory: $PackageLibDir"
+          Write-Host "Created fresh directory: $PackageLibDir"
 
-          # Find Windows SDK Lib Path for x64
-          $SdkLibPathX64_um = ""
-          $SdkLibPathX64_ucrt = ""
-          $WinSdkDir = $env:WindowsSdkDir
-          if (-not ([string]::IsNullOrEmpty($WinSdkDir))) {
-            $SdkLibRoot = Join-Path -Path $WinSdkDir -ChildPath "Lib"
-            if (Test-Path $SdkLibRoot) {
-              $LatestSDKVersion = Get-ChildItem -Path $SdkLibRoot | Where-Object {$_.Name -match "^\d+\.\d+\.\d+\.\d+$"} | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
-              if ($LatestSDKVersion) {
-                  $SdkLibPathX64_um = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "um" -ChildPath "x64"
-                  $SdkLibPathX64_ucrt = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "ucrt" -ChildPath "x64"
-                  Write-Host "Windows SDK Universal CRT Lib Path (x64): $SdkLibPathX64_ucrt"
-                  Write-Host "Windows SDK UM Lib Path (x64): $SdkLibPathX64_um"
-
-                  if (-not (Test-Path $SdkLibPathX64_um)) {
-                    Write-Warning "UM lib path does not exist: $SdkLibPathX64_um"
-                    # Potentially fall back or error if strictly needed and not found
-                  }
-                  if (-not (Test-Path $SdkLibPathX64_ucrt)) {
-                    Write-Warning "UCRT lib path does not exist: $SdkLibPathX64_ucrt"
-                    # Potentially fall back or error if strictly needed and not found
-                  }
-
-              } else {
-                  Write-Error "Could not determine latest Windows SDK version path in $SdkLibRoot"
-                  exit 1
-              }
-            } else {
-                Write-Error "Windows SDK Lib directory not found at $SdkLibRoot"
-                exit 1
+          # Find Windows SDK Root Path
+          $WinSdkRoot = ""
+          try {
+            $WinSdkRoot = (vswhere -latest -property windowsSdkPath -nologo -format value -errorAction SilentlyContinue)
+            if (-not $WinSdkRoot) {
+                Write-Warning "vswhere did not return 'windowsSdkPath'. Trying to find VS C++ tools path..."
+                $vsPath = (vswhere -latest -products * -requires Microsoft.VisualStudio.Workload.VCTools -property installationPath -nologo -format value -errorAction SilentlyContinue)
+                if ($vsPath) {
+                    $inferredSdkRoot = Join-Path $vsPath "..\..\..\..\Windows Kits\10" # Common relative path
+                    if (Test-Path (Join-Path $inferredSdkRoot "Lib")) {
+                        $WinSdkRoot = (Get-Item $inferredSdkRoot).FullName # Normalize path
+                        Write-Warning "Inferred Windows SDK root from VS Path: $WinSdkRoot"
+                    } else {
+                         Write-Warning "Could not validate inferred SDK path: $inferredSdkRoot. Checking default Program Files location."
+                         $WinSdkRoot = "" # Reset so next fallback is tried
+                    }
+                } else {
+                    Write-Warning "vswhere could not find VS C++ tools path. Checking default Program Files location."
+                }
             }
-          } else {
-            Write-Error "WindowsSdkDir environment variable not found or empty. Cannot locate SDK libraries."
+          } catch {
+             Write-Warning "vswhere execution failed or it's not found: $($_.Exception.Message). Checking default Program Files location."
+          }
+
+          if (-not $WinSdkRoot -or -not (Test-Path (Join-Path $WinSdkRoot "Lib"))) {
+             $defaultSdkRoot = "C:\Program Files (x86)\Windows Kits\10"
+             Write-Warning "Windows SDK root not found or invalid via vswhere, trying default: $defaultSdkRoot"
+             if (Test-Path (Join-Path $defaultSdkRoot "Lib")) {
+                 $WinSdkRoot = $defaultSdkRoot
+             } else {
+                 Write-Error "Windows SDK root not found at vswhere paths or default location '$defaultSdkRoot'."
+                 exit 1
+             }
+          }
+
+          Write-Host "Using Windows SDK Root: $WinSdkRoot"
+          $SdkLibRoot = Join-Path -Path $WinSdkRoot -ChildPath "Lib"
+
+          if (-not (Test-Path $SdkLibRoot)) {
+            Write-Error "Windows SDK Lib directory not found at $SdkLibRoot after attempting detection."
             exit 1
+          }
+
+          # Find latest SDK version directory within $SdkLibRoot
+          $LatestSDKVersion = Get-ChildItem -Path $SdkLibRoot | Where-Object {$_.Name -match "^\d+\.\d+\.\d+\.\d+$" -and $_.PSIsContainer} | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
+          if (-not $LatestSDKVersion) {
+              Write-Error "Could not determine latest Windows SDK version path in $SdkLibRoot. No versioned subdirectories found."
+              exit 1
+          }
+          Write-Host "Using SDK Version: $LatestSDKVersion"
+
+          $SdkLibPathX64_um = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "um" -ChildPath "x64"
+          $SdkLibPathX64_ucrt = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "ucrt" -ChildPath "x64"
+          Write-Host "Windows SDK Universal CRT Lib Path (x64): $SdkLibPathX64_ucrt"
+          Write-Host "Windows SDK UM Lib Path (x64): $SdkLibPathX64_um"
+
+          if (-not (Test-Path $SdkLibPathX64_um)) {
+            Write-Warning "UM lib path does not exist: $SdkLibPathX64_um"
+          }
+          if (-not (Test-Path $SdkLibPathX64_ucrt)) {
+            Write-Warning "UCRT lib path does not exist: $SdkLibPathX64_ucrt"
           }
 
           $LibsToCopy = @("kernel32.lib", "msvcrt.lib", "ucrt.lib")
 
           foreach ($LibName in $LibsToCopy) {
-            # Prioritize UCRT path, then UM path
             $SourceLibPath = ""
             if ((Test-Path $SdkLibPathX64_ucrt) -and (Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName))) {
                 $SourceLibPath = Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName
@@ -314,7 +344,7 @@ jobs:
               Copy-Item -Path $SourceLibPath -Destination $DestLibPath -Force
               Write-Host "Copied $LibName from $SourceLibPath to $DestLibPath"
             } else {
-              Write-Error "Could not find $LibName in $SdkLibPathX64_ucrt or $SdkLibPathX64_um. Checked UCRT: $(Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName)), Checked UM: $(Test-Path (Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName))"
+              Write-Error "Could not find $LibName in available SDK paths (UCRT: '$SdkLibPathX64_ucrt', UM: '$SdkLibPathX64_um'). Please ensure the Windows SDK is correctly installed on the runner and vswhere can find it."
               exit 1
             }
           }
