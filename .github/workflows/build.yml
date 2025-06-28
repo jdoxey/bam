@@ -256,6 +256,23 @@ jobs:
             DEST_LLVM_LIB_PATH="$PACKAGE_DIR/lib"
             echo "Copying LLVM libraries from ${LLVM_LIB_PATH} to ${DEST_LLVM_LIB_PATH}"
             cp -r "${LLVM_LIB_PATH}" "${DEST_LLVM_LIB_PATH}"
+          # Bundle Windows system import-libs so LLD can link msvcrt and kernel32
+          LIB_ARCH=x64
+          # Determine library architecture (x64 vs x86)
+          if [[ "$(uname -m)" != "x86_64" ]]; then
+            LIB_ARCH=x86
+          fi
+          # Copy kernel32.lib from Windows SDK
+          SDK_LIB_DIR="${WindowsSdkDir}/Lib/${WindowsSDKVersion}/um/${LIB_ARCH}"
+          echo "Copying kernel32.lib from ${SDK_LIB_DIR}"
+          cp "${SDK_LIB_DIR}/kernel32.lib" "${DEST_LLVM_LIB_PATH}/"
+          # Copy msvcrt.lib from MSVC CRT
+          for CRT_DIR in "${VSINSTALLDIR}/VC/Tools/MSVC"/*; do
+            MSVCRT_LIB_DIR="${CRT_DIR}/lib/${LIB_ARCH}"
+            break
+          done
+          echo "Copying msvcrt.lib from ${MSVCRT_LIB_DIR}"
+          cp "${MSVCRT_LIB_DIR}/msvcrt.lib" "${DEST_LLVM_LIB_PATH}/"
           fi
 
           echo "Package contents:"

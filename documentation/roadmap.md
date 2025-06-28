@@ -19,3 +19,16 @@
 - The Beta releases come at the top of the 'Releases' list in GitHub. This will make it harder for people to easily find the 'latest stable release'.
 - Align jobs that get run in the different builds (make sure beta.yml, pr.yml and release.yml build processes are aligned).
 - Fix Apple workaround for print statement (hard coded length)
+
+## Tech Debt
+- Monolithic, platform-specific linking logic in `src/main.rs`.
+- Huge, tangled code generation in `src/codegen.rs`.
+- Excessive and inconsistent use of `unwrap()` / panics.
+- Incomplete feature implementation (dead-end `if` statements).
+- Debug-and-dead-code clutter left in code.
+- Manual, ad-hoc CLI parsing and path handling.
+- Out-of-sync and contradictory documentation.
+- Missing top-level README and LICENSE.
+- Overly complex CI workflows.
+- Unused dependencies in `Cargo.toml`.
+- No automated tests.
