@@ -250,21 +250,94 @@ jobs:
           echo "Copying bam executable to package"
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
 
-          # NEW: Copy the LLVM lib directory for Windows
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            LLVM_LIB_PATH="${{ env.LLVM_EXTRACT_DIR }}/clang+llvm-20.1.1-x86_64-pc-windows-msvc/lib"
-            DEST_LLVM_LIB_PATH="$PACKAGE_DIR/lib"
-            echo "Copying LLVM libraries from ${LLVM_LIB_PATH} to ${DEST_LLVM_LIB_PATH}"
-            cp -r "${LLVM_LIB_PATH}" "${DEST_LLVM_LIB_PATH}"
-          fi
+          # LLVM libraries are not needed for basic bam operation and were causing issues.
+          # We will now package specific Windows SDK libraries instead.
+          # if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          #   LLVM_LIB_PATH="${{ env.LLVM_EXTRACT_DIR }}/clang+llvm-20.1.1-x86_64-pc-windows-msvc/lib"
+          #   DEST_LLVM_LIB_PATH="$PACKAGE_DIR/lib"
+          #   echo "Copying LLVM libraries from ${LLVM_LIB_PATH} to ${DEST_LLVM_LIB_PATH}"
+          #   cp -r "${LLVM_LIB_PATH}" "${DEST_LLVM_LIB_PATH}"
+          # fi
 
-          echo "Package contents:"
+          echo "Package contents (after LLD and bam exe copy):"
           ls -la "$PACKAGE_DIR/"
 
           if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
             echo "Verifying dynamic dependencies of packaged LLD on macOS:"
             otool -L "$PACKAGE_DIR/${{ env.PACKAGED_LLD_NAME }}" # Should be package/lld
           fi
+
+      - name: Package Windows SDK Libraries
+        if: matrix.os == 'windows-latest'
+        shell: pwsh # Using PowerShell for better path manipulation on Windows
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PackageDir = "package" # As defined in the previous step
+
+          # Create the $PackageDir/lib directory
+          $PackageLibDir = Join-Path -Path $PackageDir -ChildPath "lib"
+          if (Test-Path $PackageLibDir) {
+              Write-Host "Removing existing directory: $PackageLibDir to ensure clean state."
+              Remove-Item -Recurse -Force -Path $PackageLibDir
+          }
+          New-Item -ItemType Directory -Path $PackageLibDir -Force | Out-Null
+          Write-Host "Created fresh directory: $PackageLibDir"
+
+          # Find Windows SDK Lib Path for x64
+          $SdkLibPathX64_um = ""
+          $SdkLibPathX64_ucrt = ""
+          $WinSdkDir = $env:WindowsSdkDir
+          if (-not ([string]::IsNullOrEmpty($WinSdkDir))) {
+            $SdkLibRoot = Join-Path -Path $WinSdkDir -ChildPath "Lib"
+            if (Test-Path $SdkLibRoot) {
+              $LatestSDKVersion = Get-ChildItem -Path $SdkLibRoot | Where-Object {$_.Name -match "^\d+\.\d+\.\d+\.\d+$"} | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
+              if ($LatestSDKVersion) {
+                  $SdkLibPathX64_um = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "um" -ChildPath "x64"
+                  $SdkLibPathX64_ucrt = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "ucrt" -ChildPath "x64"
+                  Write-Host "Windows SDK Universal CRT Lib Path (x64): $SdkLibPathX64_ucrt"
+                  Write-Host "Windows SDK UM Lib Path (x64): $SdkLibPathX64_um"
+
+                  if (-not (Test-Path $SdkLibPathX64_um)) {
+                    Write-Warning "UM lib path does not exist: $SdkLibPathX64_um"
+                  }
+                  if (-not (Test-Path $SdkLibPathX64_ucrt)) {
+                    Write-Warning "UCRT lib path does not exist: $SdkLibPathX64_ucrt"
+                  }
+              } else {
+                  Write-Error "Could not determine latest Windows SDK version path in $SdkLibRoot"
+                  exit 1
+              }
+            } else {
+                Write-Error "Windows SDK Lib directory not found at $SdkLibRoot"
+                exit 1
+            }
+          } else {
+            Write-Error "WindowsSdkDir environment variable not found or empty. Cannot locate SDK libraries."
+            exit 1
+          }
+
+          $LibsToCopy = @("kernel32.lib", "msvcrt.lib", "ucrt.lib")
+
+          foreach ($LibName in $LibsToCopy) {
+            $SourceLibPath = ""
+            if ((Test-Path $SdkLibPathX64_ucrt) -and (Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName))) {
+                $SourceLibPath = Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName
+            } elseif ((Test-Path $SdkLibPathX64_um) -and (Test-Path (Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName))) {
+                $SourceLibPath = Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName
+            }
+
+            if (-not ([string]::IsNullOrEmpty($SourceLibPath))) {
+              $DestLibPath = Join-Path -Path $PackageLibDir -ChildPath $LibName
+              Copy-Item -Path $SourceLibPath -Destination $DestLibPath -Force
+              Write-Host "Copied $LibName from $SourceLibPath to $DestLibPath"
+            } else {
+              Write-Error "Could not find $LibName in available SDK paths (UCRT: '$SdkLibPathX64_ucrt', UM: '$SdkLibPathX64_um'). Please ensure the Windows SDK is correctly installed on the runner."
+              exit 1
+            }
+          }
+
+          Write-Host "Contents of $PackageLibDir:"
+          Get-ChildItem -Path $PackageLibDir | ForEach-Object { Write-Host $_.Name }
 
       - name: Test compilation end-to-end
         shell: bash
