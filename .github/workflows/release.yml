@@ -268,18 +268,28 @@ jobs:
 
           # Find Windows SDK Root Path
           $WinSdkRoot = ""
+          $VsWhereOutput = ""
           try {
-            $WinSdkRoot = (vswhere -latest -property windowsSdkPath -nologo -format value -errorAction SilentlyContinue)
+            $VsWhereOutput = (vswhere -latest -property windowsSdkPath -nologo -format value -errorAction SilentlyContinue)
+            if ($VsWhereOutput) { $WinSdkRoot = $VsWhereOutput } # Assign only if non-empty
+
             if (-not $WinSdkRoot) {
                 Write-Warning "vswhere did not return 'windowsSdkPath'. Trying to find VS C++ tools path..."
-                $vsPath = (vswhere -latest -products * -requires Microsoft.VisualStudio.Workload.VCTools -property installationPath -nologo -format value -errorAction SilentlyContinue)
-                if ($vsPath) {
+                $VsWhereOutput = (vswhere -latest -products * -requires Microsoft.VisualStudio.Workload.VCTools -property installationPath -nologo -format value -errorAction SilentlyContinue)
+                if ($VsWhereOutput) {
+                    $vsPath = $VsWhereOutput
                     $inferredSdkRoot = Join-Path $vsPath "..\..\..\..\Windows Kits\10" # Common relative path
-                    if (Test-Path (Join-Path $inferredSdkRoot "Lib")) {
-                        $WinSdkRoot = (Get-Item $inferredSdkRoot).FullName # Normalize path
-                        Write-Warning "Inferred Windows SDK root from VS Path: $WinSdkRoot"
+                    # Check if inferredSdkRoot itself is a valid directory before trying to join "Lib" to it for Test-Path
+                    if (Test-Path $inferredSdkRoot -PathType Container) {
+                        if (Test-Path (Join-Path $inferredSdkRoot "Lib")) {
+                            $WinSdkRoot = (Get-Item $inferredSdkRoot).FullName # Normalize path
+                            Write-Warning "Inferred Windows SDK root from VS Path: $WinSdkRoot"
+                        } else {
+                             Write-Warning "Inferred SDK path '$inferredSdkRoot' does not contain a 'Lib' subdirectory. Will try default."
+                             $WinSdkRoot = "" # Reset so next fallback is tried
+                        }
                     } else {
-                         Write-Warning "Could not validate inferred SDK path: $inferredSdkRoot. Checking default Program Files location."
+                         Write-Warning "Inferred SDK path '$inferredSdkRoot' is not a valid directory. Will try default."
                          $WinSdkRoot = "" # Reset so next fallback is tried
                     }
                 } else {
@@ -288,15 +298,28 @@ jobs:
             }
           } catch {
              Write-Warning "vswhere execution failed or it's not found: $($_.Exception.Message). Checking default Program Files location."
+             $WinSdkRoot = "" # Ensure WinSdkRoot is clear on vswhere error
           }
 
-          if (-not $WinSdkRoot -or -not (Test-Path (Join-Path $WinSdkRoot "Lib"))) {
+          # Validate the obtained $WinSdkRoot before using it
+          $isValidPathFromVsWhere = $false
+          if ($WinSdkRoot) {
+            try {
+                Get-Item -Path $WinSdkRoot -PathType Container -ErrorAction Stop | Out-Null
+                $isValidPathFromVsWhere = $true
+            } catch {
+                Write-Warning "The path '$WinSdkRoot' obtained from vswhere is not a valid directory item. Error: $($_.Exception.Message)"
+                $WinSdkRoot = "" # Invalidate it so fallbacks are tried
+            }
+          }
+
+          if (-not $isValidPathFromVsWhere) { # If vswhere didn't yield a valid path
              $defaultSdkRoot = "C:\Program Files (x86)\Windows Kits\10"
              Write-Warning "Windows SDK root not found or invalid via vswhere, trying default: $defaultSdkRoot"
-             if (Test-Path (Join-Path $defaultSdkRoot "Lib")) {
+             if (Test-Path (Join-Path $defaultSdkRoot "Lib") -PathType Container) { # Check Lib dir exists
                  $WinSdkRoot = $defaultSdkRoot
              } else {
-                 Write-Error "Windows SDK root not found at vswhere paths or default location '$defaultSdkRoot'."
+                 Write-Error "Windows SDK root not found at vswhere paths or default location '$defaultSdkRoot' (Lib directory missing/inaccessible)."
                  exit 1
              }
           }
@@ -304,15 +327,15 @@ jobs:
           Write-Host "Using Windows SDK Root: $WinSdkRoot"
           $SdkLibRoot = Join-Path -Path $WinSdkRoot -ChildPath "Lib"
 
-          if (-not (Test-Path $SdkLibRoot)) {
-            Write-Error "Windows SDK Lib directory not found at $SdkLibRoot after attempting detection."
+          if (-not (Test-Path $SdkLibRoot -PathType Container)) {
+            Write-Error "Windows SDK Lib directory not found at '$SdkLibRoot' or is not a directory."
             exit 1
           }
 
           # Find latest SDK version directory within $SdkLibRoot
           $LatestSDKVersion = Get-ChildItem -Path $SdkLibRoot | Where-Object {$_.Name -match "^\d+\.\d+\.\d+\.\d+$" -and $_.PSIsContainer} | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
           if (-not $LatestSDKVersion) {
-              Write-Error "Could not determine latest Windows SDK version path in $SdkLibRoot. No versioned subdirectories found."
+              Write-Error "Could not determine latest Windows SDK version path in '$SdkLibRoot'. No versioned subdirectories found."
               exit 1
           }
           Write-Host "Using SDK Version: $LatestSDKVersion"
@@ -322,20 +345,20 @@ jobs:
           Write-Host "Windows SDK Universal CRT Lib Path (x64): $SdkLibPathX64_ucrt"
           Write-Host "Windows SDK UM Lib Path (x64): $SdkLibPathX64_um"
 
-          if (-not (Test-Path $SdkLibPathX64_um)) {
-            Write-Warning "UM lib path does not exist: $SdkLibPathX64_um"
+          if (-not (Test-Path $SdkLibPathX64_um -PathType Container)) {
+            Write-Warning "UM lib path does not exist or is not a directory: $SdkLibPathX64_um"
           }
-          if (-not (Test-Path $SdkLibPathX64_ucrt)) {
-            Write-Warning "UCRT lib path does not exist: $SdkLibPathX64_ucrt"
+          if (-not (Test-Path $SdkLibPathX64_ucrt -PathType Container)) {
+            Write-Warning "UCRT lib path does not exist or is not a directory: $SdkLibPathX64_ucrt"
           }
 
           $LibsToCopy = @("kernel32.lib", "msvcrt.lib", "ucrt.lib")
 
           foreach ($LibName in $LibsToCopy) {
             $SourceLibPath = ""
-            if ((Test-Path $SdkLibPathX64_ucrt) -and (Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName))) {
+            if ((Test-Path $SdkLibPathX64_ucrt -PathType Container) -and (Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName) -PathType Leaf)) {
                 $SourceLibPath = Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName
-            } elseif ((Test-Path $SdkLibPathX64_um) -and (Test-Path (Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName))) {
+            } elseif ((Test-Path $SdkLibPathX64_um -PathType Container) -and (Test-Path (Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName) -PathType Leaf)) {
                 $SourceLibPath = Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName
             }
 
@@ -344,7 +367,7 @@ jobs:
               Copy-Item -Path $SourceLibPath -Destination $DestLibPath -Force
               Write-Host "Copied $LibName from $SourceLibPath to $DestLibPath"
             } else {
-              Write-Error "Could not find $LibName in available SDK paths (UCRT: '$SdkLibPathX64_ucrt', UM: '$SdkLibPathX64_um'). Please ensure the Windows SDK is correctly installed on the runner and vswhere can find it."
+              Write-Error "Could not find '$LibName' as a file in available SDK paths (UCRT: '$SdkLibPathX64_ucrt', UM: '$SdkLibPathX64_um'). Please ensure the Windows SDK is correctly installed on the runner and vswhere can find it."
               exit 1
             }
           }
