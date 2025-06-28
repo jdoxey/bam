@@ -164,7 +164,7 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
         // Create ld64.lld symlink to rust-lld
         if !ld64_path.exists() {
             std::os::unix::fs::symlink(lld_path, &ld64_path)
-                .map_err(|e| format!("Failed to create ld64.lld symlink: {}", e))?;
+                .map_err(|e| format!("Failed to create ld64.lld symlink: {e}"))?;
         }
 
         let mut cmd = process::Command::new(&ld64_path);
@@ -215,17 +215,20 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
 
         let output = cmd
             .output()
-            .map_err(|e| format!("Failed to execute ld64.lld: {}", e))?;
+            .map_err(|e| format!("Failed to execute ld64.lld: {e}"))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!(
-                "ld64.lld linking failed: {}\n\n
-                On macOS, bam requires Xcode Command Line Tools to be installed.\n\
-                Install them with: xcode-select --install\n\
-                \n
+                "ld64.lld linking failed: {stderr}
+
+                On macOS, bam requires Xcode Command Line Tools to be installed.
+
+                Install them with: xcode-select --install
+
+                
+
                 Alternatively, you can install LLVM via Homebrew: brew install llvm",
-                stderr
             ));
         }
     }
