@@ -280,8 +280,16 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg(object_file) // Our object file
             .arg("/defaultlib:msvcrt") // Link against MSVC runtime
             .arg("/defaultlib:kernel32") // Link against kernel32
+            .arg("/defaultlib:ucrt") // Link against Universal C Runtime
             .arg("/subsystem:console") // Console application
-            .arg("/libpath:./lib"); // Add bundled lib directory
+            .arg("/libpath:./lib"); // Add bundled lib directory. This is expected to be populated in release packages.
+
+        // For local development, if ./lib doesn't exist or is missing essentials,
+        // we might add more system paths. But for packaged distributions,
+        // ./lib should be sufficient and self-contained.
+        // The logic for adding system paths for developer convenience will be handled
+        // in a later step if `./lib` is not found or is inadequate.
+        // For now, we strictly adhere to `./lib` for the self-contained package goal.
 
         let output = cmd
             .output()

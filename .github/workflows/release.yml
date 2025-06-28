@@ -251,6 +251,77 @@ jobs:
             otool -L "package/${{ env.PACKAGED_LLD_NAME }}" # Should be package/lld
           fi
 
+      - name: Package Windows SDK Libraries
+        if: matrix.os == 'windows-latest'
+        shell: pwsh # Using PowerShell for better path manipulation on Windows
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # Create the package/lib directory
+          $PackageLibDir = Join-Path -Path "package" -ChildPath "lib"
+          New-Item -ItemType Directory -Path $PackageLibDir -Force | Out-Null
+          Write-Host "Created directory: $PackageLibDir"
+
+          # Find Windows SDK Lib Path for x64
+          $SdkLibPathX64_um = ""
+          $SdkLibPathX64_ucrt = ""
+          $WinSdkDir = $env:WindowsSdkDir
+          if (-not ([string]::IsNullOrEmpty($WinSdkDir))) {
+            $SdkLibRoot = Join-Path -Path $WinSdkDir -ChildPath "Lib"
+            if (Test-Path $SdkLibRoot) {
+              $LatestSDKVersion = Get-ChildItem -Path $SdkLibRoot | Where-Object {$_.Name -match "^\d+\.\d+\.\d+\.\d+$"} | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
+              if ($LatestSDKVersion) {
+                  $SdkLibPathX64_um = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "um" -ChildPath "x64"
+                  $SdkLibPathX64_ucrt = Join-Path -Path $SdkLibRoot -ChildPath $LatestSDKVersion -ChildPath "ucrt" -ChildPath "x64"
+                  Write-Host "Windows SDK Universal CRT Lib Path (x64): $SdkLibPathX64_ucrt"
+                  Write-Host "Windows SDK UM Lib Path (x64): $SdkLibPathX64_um"
+
+                  if (-not (Test-Path $SdkLibPathX64_um)) {
+                    Write-Warning "UM lib path does not exist: $SdkLibPathX64_um"
+                    # Potentially fall back or error if strictly needed and not found
+                  }
+                  if (-not (Test-Path $SdkLibPathX64_ucrt)) {
+                    Write-Warning "UCRT lib path does not exist: $SdkLibPathX64_ucrt"
+                    # Potentially fall back or error if strictly needed and not found
+                  }
+
+              } else {
+                  Write-Error "Could not determine latest Windows SDK version path in $SdkLibRoot"
+                  exit 1
+              }
+            } else {
+                Write-Error "Windows SDK Lib directory not found at $SdkLibRoot"
+                exit 1
+            }
+          } else {
+            Write-Error "WindowsSdkDir environment variable not found or empty. Cannot locate SDK libraries."
+            exit 1
+          }
+
+          $LibsToCopy = @("kernel32.lib", "msvcrt.lib", "ucrt.lib")
+
+          foreach ($LibName in $LibsToCopy) {
+            # Prioritize UCRT path, then UM path
+            $SourceLibPath = ""
+            if ((Test-Path $SdkLibPathX64_ucrt) -and (Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName))) {
+                $SourceLibPath = Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName
+            } elseif ((Test-Path $SdkLibPathX64_um) -and (Test-Path (Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName))) {
+                $SourceLibPath = Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName
+            }
+
+            if (-not ([string]::IsNullOrEmpty($SourceLibPath))) {
+              $DestLibPath = Join-Path -Path $PackageLibDir -ChildPath $LibName
+              Copy-Item -Path $SourceLibPath -Destination $DestLibPath -Force
+              Write-Host "Copied $LibName from $SourceLibPath to $DestLibPath"
+            } else {
+              Write-Error "Could not find $LibName in $SdkLibPathX64_ucrt or $SdkLibPathX64_um. Checked UCRT: $(Test-Path (Join-Path -Path $SdkLibPathX64_ucrt -ChildPath $LibName)), Checked UM: $(Test-Path (Join-Path -Path $SdkLibPathX64_um -ChildPath $LibName))"
+              exit 1
+            }
+          }
+
+          Write-Host "Contents of package/lib:"
+          Get-ChildItem -Path $PackageLibDir | ForEach-Object { Write-Host $_.Name }
+
       - name: Test compilation end-to-end
         shell: bash
         run: |
