@@ -182,15 +182,17 @@ fn link_with_clang(
     executable_name: &str,
 ) -> Result<(), String> {
     let mut cmd = process::Command::new(clang_path);
-    // Use clang with LLD to link COFF, point to our import-libs folder
-    cmd.arg("-fuse-ld=lld")
+    // Use clang with LLD to link COFF, set target and point to our import-libs folder
+    cmd.arg("-target")
+        .arg("x86_64-pc-windows-msvc")
+        .arg("-fuse-ld=lld")
         .arg(object_file)
         .arg("-o")
         .arg(executable_name)
         .arg("-L./lib")
         .arg("-lmsvcrt")
         .arg("-lkernel32")
-        .arg("-Wl,/subsystem:console");
+        .arg("-Wl,-subsystem,console");
 
     let output = cmd
         .output()
