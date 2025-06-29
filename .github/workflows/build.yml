@@ -189,7 +189,7 @@ jobs:
             echo "LLVM_TARBALL_NAME=llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
             echo "LLVM_DOWNLOAD_URL=https://github.com/mstorsjo/llvm-mingw/releases/download/20250319/llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
             # The mingw zip unpacks into a top-level llvm-mingw-*-ucrt-x86_64 folder
-            echo "LLVM_BIN_SUBPATH=x86_64-w64-mingw32/bin" >> $GITHUB_ENV
+            echo "LLVM_BIN_SUBPATH=bin" >> $GITHUB_ENV
             echo "EXTRACTED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
             echo "PACKAGED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
             echo "LIB_SUBPATH=x86_64-w64-mingw32/lib" >> $GITHUB_ENV
@@ -245,8 +245,10 @@ jobs:
             tar -xf "${{ env.LLVM_TARBALL_NAME }}" -C "${{ env.LLVM_EXTRACT_DIR }}"
           fi
 
-          SOURCE_LLD_PATH="${{ env.LLVM_EXTRACT_DIR }}/${{ env.LLVM_BIN_SUBPATH }}/${{ env.EXTRACTED_LLD_NAME }}"
-          DEST_LLD_PATH="$PACKAGE_DIR/${{ env.PACKAGED_LLD_NAME }}"
+          # The archive unpacks into a top-level folder named after the zip (minus .zip)
+          ARCHIVE_DIR="$LLVM_EXTRACT_DIR/${LLVM_TARBALL_NAME%.zip}"
+          SOURCE_LLD_PATH="$ARCHIVE_DIR/$LLVM_BIN_SUBPATH/$EXTRACTED_LLD_NAME"
+          DEST_LLD_PATH="$PACKAGE_DIR/$PACKAGED_LLD_NAME"
 
           echo "Copying LLD from ${SOURCE_LLD_PATH} to ${DEST_LLD_PATH}"
           cp "${SOURCE_LLD_PATH}" "${DEST_LLD_PATH}"
