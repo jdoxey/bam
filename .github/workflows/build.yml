@@ -190,8 +190,8 @@ jobs:
             echo "LLVM_DOWNLOAD_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.1/clang+llvm-20.1.1-x86_64-pc-windows-msvc.tar.xz" >> $GITHUB_ENV
             # Note: Windows path in LLVM_BIN_SUBPATH uses forward slashes for consistency in shell scripts
             echo "LLVM_BIN_SUBPATH=clang+llvm-20.1.1-x86_64-pc-windows-msvc/bin" >> $GITHUB_ENV
-            echo "EXTRACTED_LLD_NAME=lld-link.exe" >> $GITHUB_ENV
-            echo "PACKAGED_LLD_NAME=lld-link.exe" >> $GITHUB_ENV
+            echo "EXTRACTED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
+            echo "PACKAGED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
             echo "LLVM_TARBALL_NAME=LLVM-20.1.1-macOS-ARM64.tar.xz" >> $GITHUB_ENV
