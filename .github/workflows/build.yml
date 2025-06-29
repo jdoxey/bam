@@ -261,8 +261,10 @@ jobs:
             echo "Copying mingw import-libs to package/lib"
             ARCHIVE_DIR="${LLVM_EXTRACT_DIR}/${LLVM_TARBALL_NAME%.zip}"
             mkdir -p "$PACKAGE_DIR/lib"
+            # Copy required import-libs and CRT startup objects
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmsvcrt.a" "$PACKAGE_DIR/lib/"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libkernel32.a" "$PACKAGE_DIR/lib/"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}"/*.o "$PACKAGE_DIR/lib/"
             echo "Copying bundled clang and driver to package"
             cp "$ARCHIVE_DIR/bin/clang.exe" "$PACKAGE_DIR/"
             cp "$ARCHIVE_DIR/bin/clang-20.exe" "$PACKAGE_DIR/"
