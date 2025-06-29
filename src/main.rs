@@ -160,6 +160,8 @@ fn get_rust_lld() -> Result<PathBuf, String> {
 }
 
 /// Try to find bundled clang.exe for Windows linking, next to the bam executable.
+#[cfg(target_os = "windows")]
+#[allow(dead_code)]
 fn get_bundled_clang() -> Result<PathBuf, String> {
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
