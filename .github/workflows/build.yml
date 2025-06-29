@@ -190,7 +190,7 @@ jobs:
             echo "LLVM_DOWNLOAD_URL=https://github.com/mstorsjo/llvm-mingw/releases/download/20250319/llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
             # The mingw zip unpacks into a top-level llvm-mingw-*-ucrt-x86_64 folder
             echo "LLVM_BIN_SUBPATH=x86_64-w64-mingw32/bin" >> $GITHUB_ENV
-            echo "EXTRACTED_LLD_NAME=lld.exe" >> $GITHUB_ENV
+            echo "EXTRACTED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
             echo "PACKAGED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
             echo "LIB_SUBPATH=x86_64-w64-mingw32/lib" >> $GITHUB_ENV
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
