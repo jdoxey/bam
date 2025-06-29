@@ -238,7 +238,11 @@ jobs:
           # If it extracts into a subdirectory linux_amd64 within LLVM_EXTRACT_DIR, then LLVM_BIN_SUBPATH should be linux_amd64/bin.
           # Assuming static-clang `linux_amd64.tar.xz` top level is `bin/`, `lib/` etc.
           # So, if -C is ${{ env.LLVM_EXTRACT_DIR }}, then path is ${{ env.LLVM_EXTRACT_DIR }}/bin/lld
-          tar -xf "${{ env.LLVM_TARBALL_NAME }}" -C "${{ env.LLVM_EXTRACT_DIR }}"
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            7z x "${{ env.LLVM_TARBALL_NAME }}" -o"${{ env.LLVM_EXTRACT_DIR }}"
+          else
+            tar -xf "${{ env.LLVM_TARBALL_NAME }}" -C "${{ env.LLVM_EXTRACT_DIR }}"
+          fi
 
           SOURCE_LLD_PATH="${{ env.LLVM_EXTRACT_DIR }}/${{ env.LLVM_BIN_SUBPATH }}/${{ env.EXTRACTED_LLD_NAME }}"
           DEST_LLD_PATH="$PACKAGE_DIR/${{ env.PACKAGED_LLD_NAME }}"
