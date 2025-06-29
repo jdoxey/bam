@@ -263,6 +263,9 @@ jobs:
             mkdir -p "$PACKAGE_DIR/lib"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmsvcrt.a" "$PACKAGE_DIR/lib/"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libkernel32.a" "$PACKAGE_DIR/lib/"
+            echo "Copying bundled clang to package"
+            cp "$ARCHIVE_DIR/bin/clang.exe" "$PACKAGE_DIR/"
+            chmod +x "$PACKAGE_DIR/clang.exe"
           fi
 
           echo "Package contents:"
