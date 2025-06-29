@@ -44,7 +44,15 @@ fn compile_program(statements: &[Stmt]) -> Vec<u8> {
 }
 
 fn link_executable(object_file: &str, executable_name: &str) -> Result<(), String> {
-    // Use hybrid LLD approach for all platforms
+    // On Windows, prefer bundled clang driver for proper COFF linking (with UCRT/Mingw)
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(clang_path) = get_bundled_clang() {
+            println!("Using bundled clang for linking: {}", clang_path.display());
+            return link_with_clang(&clang_path, object_file, executable_name);
+        }
+    }
+    // Fallback to LLD linker
     let lld_path = get_lld_for_linking()?;
     link_with_lld(&lld_path, object_file, executable_name)
 }
@@ -149,6 +157,48 @@ fn get_rust_lld() -> Result<PathBuf, String> {
         Ok(rust_lld)
     } else {
         Err(format!("rust-lld not found at: {}", rust_lld.display()))
+    }
+
+    /// Try to find bundled clang.exe for Windows linking, next to the bam executable.
+    fn get_bundled_clang() -> Result<PathBuf, String> {
+        if let Ok(exe_path) = env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                let clang = exe_dir.join("clang.exe");
+                if clang.exists() {
+                    return Ok(clang);
+                }
+            }
+        }
+        Err("Bundled clang.exe not found".to_string())
+    }
+
+    /// Link using the bundled clang driver on Windows, passing through to LLD for COFF support.
+    #[cfg(target_os = "windows")]
+    fn link_with_clang(
+        clang_path: &Path,
+        object_file: &str,
+        executable_name: &str,
+    ) -> Result<(), String> {
+        let mut cmd = process::Command::new(clang_path);
+        // Use clang with LLD to link COFF, point to our import-libs folder
+        cmd.arg("-fuse-ld=lld")
+            .arg(object_file)
+            .arg("-o")
+            .arg(executable_name)
+            .arg("-L./lib")
+            .arg("-lmsvcrt")
+            .arg("-lkernel32")
+            .arg("-Wl,/subsystem:console");
+
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to execute clang for linking: {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Clang linking failed: {stderr}"));
+        }
+        Ok(())
     }
 }
 
