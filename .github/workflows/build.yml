@@ -190,8 +190,8 @@ jobs:
             echo "LLVM_DOWNLOAD_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.1/clang+llvm-20.1.1-x86_64-pc-windows-msvc.tar.xz" >> $GITHUB_ENV
             # Note: Windows path in LLVM_BIN_SUBPATH uses forward slashes for consistency in shell scripts
             echo "LLVM_BIN_SUBPATH=clang+llvm-20.1.1-x86_64-pc-windows-msvc/bin" >> $GITHUB_ENV
-            echo "EXTRACTED_LLD_NAME=lld.exe" >> $GITHUB_ENV
-            echo "PACKAGED_LLD_NAME=lld.exe" >> $GITHUB_ENV
+            echo "EXTRACTED_LLD_NAME=lld-link.exe" >> $GITHUB_ENV
+            echo "PACKAGED_LLD_NAME=lld-link.exe" >> $GITHUB_ENV
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
             echo "LLVM_TARBALL_NAME=LLVM-20.1.1-macOS-ARM64.tar.xz" >> $GITHUB_ENV
@@ -250,30 +250,6 @@ jobs:
           echo "Copying bam executable to package"
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
 
-          # NEW: Copy the LLVM lib directory for Windows
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            LLVM_LIB_PATH="${{ env.LLVM_EXTRACT_DIR }}/clang+llvm-20.1.1-x86_64-pc-windows-msvc/lib"
-            DEST_LLVM_LIB_PATH="$PACKAGE_DIR/lib"
-            echo "Copying LLVM libraries from ${LLVM_LIB_PATH} to ${DEST_LLVM_LIB_PATH}"
-            cp -r "${LLVM_LIB_PATH}" "${DEST_LLVM_LIB_PATH}"
-          # Bundle Windows system import-libs so LLD can link msvcrt and kernel32
-          LIB_ARCH=x64
-          # Determine library architecture (x64 vs x86)
-          if [[ "$(uname -m)" != "x86_64" ]]; then
-            LIB_ARCH=x86
-          fi
-          # Copy kernel32.lib from Windows SDK
-          SDK_LIB_DIR="${WindowsSdkDir}/Lib/${WindowsSDKVersion}/um/${LIB_ARCH}"
-          echo "Copying kernel32.lib from ${SDK_LIB_DIR}"
-          cp "${SDK_LIB_DIR}/kernel32.lib" "${DEST_LLVM_LIB_PATH}/"
-          # Copy msvcrt.lib from MSVC CRT
-          for CRT_DIR in "${VSINSTALLDIR}/VC/Tools/MSVC"/*; do
-            MSVCRT_LIB_DIR="${CRT_DIR}/lib/${LIB_ARCH}"
-            break
-          done
-          echo "Copying msvcrt.lib from ${MSVCRT_LIB_DIR}"
-          cp "${MSVCRT_LIB_DIR}/msvcrt.lib" "${DEST_LLVM_LIB_PATH}/"
-          fi
 
           echo "Package contents:"
           ls -la "$PACKAGE_DIR/"
