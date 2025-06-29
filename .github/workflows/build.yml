@@ -185,13 +185,13 @@ jobs:
           echo "LLVM_EXTRACT_DIR=$LLVM_EXTRACT_DIR" >> $GITHUB_ENV
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
-            echo "LLVM_TARBALL_NAME=clang+llvm-20.1.1-x86_64-pc-windows-msvc.tar.xz" >> $GITHUB_ENV
-            echo "LLVM_DOWNLOAD_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.1/clang+llvm-20.1.1-x86_64-pc-windows-msvc.tar.xz" >> $GITHUB_ENV
-            # Note: Windows path in LLVM_BIN_SUBPATH uses forward slashes for consistency in shell scripts
-            echo "LLVM_BIN_SUBPATH=clang+llvm-20.1.1-x86_64-pc-windows-msvc/bin" >> $GITHUB_ENV
-            echo "EXTRACTED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
+            echo "LLVM_VERSION_ID=llvm-mingw-20250319-ucrt-x86_64" >> $GITHUB_ENV
+            echo "LLVM_TARBALL_NAME=llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
+            echo "LLVM_DOWNLOAD_URL=https://github.com/mstorsjo/llvm-mingw/releases/download/20250319/llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
+            echo "LLVM_BIN_SUBPATH=bin" >> $GITHUB_ENV
+            echo "EXTRACTED_LLD_NAME=lld.exe" >> $GITHUB_ENV
             echo "PACKAGED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
+            echo "LIB_SUBPATH=lib" >> $GITHUB_ENV
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
             echo "LLVM_TARBALL_NAME=LLVM-20.1.1-macOS-ARM64.tar.xz" >> $GITHUB_ENV
@@ -250,6 +250,10 @@ jobs:
           echo "Copying bam executable to package"
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
 
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo "Copying mingw libraries to package/lib"
+            cp -r "${{ env.LLVM_EXTRACT_DIR }}/${{ env.LIB_SUBPATH }}" "$PACKAGE_DIR/lib"
+          fi
 
           echo "Package contents:"
           ls -la "$PACKAGE_DIR/"
