@@ -182,7 +182,18 @@ fn link_with_clang(
     executable_name: &str,
 ) -> Result<(), String> {
     let mut cmd = process::Command::new(clang_path);
-    // Use clang with LLD to link COFF, set target and point to our import-libs folder
+    // Use clang with LLD to link COFF. First include CRT startup objects from ./lib
+    if let Ok(entries) = fs::read_dir("lib") {
+        for entry in entries {
+            let path = entry
+                .map_err(|e| format!("Failed reading lib dir: {e}"))?
+                .path();
+            if path.extension().and_then(|s| s.to_str()) == Some("o") {
+                cmd.arg(path);
+            }
+        }
+    }
+    // Then linkage settings: target triple, use lld, user object, output name, and import-libs
     cmd.arg("-target")
         .arg("x86_64-pc-windows-msvc")
         .arg("-fuse-ld=lld")
