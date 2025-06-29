@@ -185,9 +185,11 @@ jobs:
           echo "LLVM_EXTRACT_DIR=$LLVM_EXTRACT_DIR" >> $GITHUB_ENV
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Setup variables for mingw UCRT archive
+            LLVM_TARBALL_NAME="llvm-mingw-20250319-ucrt-x86_64.zip"
             echo "LLVM_VERSION_ID=llvm-mingw-20250319-ucrt-x86_64" >> $GITHUB_ENV
-            echo "LLVM_TARBALL_NAME=llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
-            echo "LLVM_DOWNLOAD_URL=https://github.com/mstorsjo/llvm-mingw/releases/download/20250319/llvm-mingw-20250319-ucrt-x86_64.zip" >> $GITHUB_ENV
+            echo "LLVM_TARBALL_NAME=$LLVM_TARBALL_NAME" >> $GITHUB_ENV
+            echo "LLVM_DOWNLOAD_URL=https://github.com/mstorsjo/llvm-mingw/releases/download/20250319/$LLVM_TARBALL_NAME" >> $GITHUB_ENV
             # The mingw zip unpacks into a top-level llvm-mingw-*-ucrt-x86_64 folder
             echo "LLVM_BIN_SUBPATH=${LLVM_TARBALL_NAME%.zip}/bin" >> $GITHUB_ENV
             echo "EXTRACTED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
