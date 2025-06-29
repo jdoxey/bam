@@ -191,7 +191,7 @@ jobs:
             echo "LLVM_BIN_SUBPATH=bin" >> $GITHUB_ENV
             echo "EXTRACTED_LLD_NAME=lld.exe" >> $GITHUB_ENV
             echo "PACKAGED_LLD_NAME=ld.lld.exe" >> $GITHUB_ENV
-            echo "LIB_SUBPATH=lib" >> $GITHUB_ENV
+            echo "LIB_SUBPATH=x86_64-w64-mingw32/lib" >> $GITHUB_ENV
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             echo "LLVM_VERSION_ID=llvmorg-20.1.1" >> $GITHUB_ENV
             echo "LLVM_TARBALL_NAME=LLVM-20.1.1-macOS-ARM64.tar.xz" >> $GITHUB_ENV
@@ -255,8 +255,11 @@ jobs:
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "Copying mingw libraries to package/lib"
-            cp -r "${{ env.LLVM_EXTRACT_DIR }}/${{ env.LIB_SUBPATH }}" "$PACKAGE_DIR/lib"
+            echo "Copying mingw import-libs to package/lib"
+            ARCHIVE_DIR="${LLVM_EXTRACT_DIR}/${LLVM_TARBALL_NAME%.zip}"
+            mkdir -p "$PACKAGE_DIR/lib"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmsvcrt.a" "$PACKAGE_DIR/lib/"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libkernel32.a" "$PACKAGE_DIR/lib/"
           fi
 
           echo "Package contents:"
