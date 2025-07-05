@@ -220,10 +220,16 @@ fn link_with_clang(
         .arg("-lucrt") // Use UCRT instead of msvcrt
         .arg("-lkernel32")
         .arg("-Wl,-subsystem,console");
-        
+
     // Debug: print the command we're about to run
-    eprintln!("Clang command: {} {}", clang_path.display(), 
-              cmd.get_args().map(|arg| arg.to_string_lossy()).collect::<Vec<_>>().join(" "));
+    eprintln!(
+        "Clang command: {} {}",
+        clang_path.display(),
+        cmd.get_args()
+            .map(|arg| arg.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
 
     let output = cmd
         .output()
