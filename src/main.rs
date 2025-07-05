@@ -262,7 +262,7 @@ fn link_with_clang(
     
     // If linking succeeded, report it
     if output.status.success() {
-        eprintln!("Generated executable: {}", executable_name);
+        eprintln!("Generated executable: {executable_name}");
     }
 
     if !output.status.success() {
