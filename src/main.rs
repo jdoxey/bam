@@ -259,6 +259,11 @@ fn link_with_clang(
     eprintln!("Clang exit status: {}", output.status);
     eprintln!("Clang STDOUT: {stdout}");
     eprintln!("Clang STDERR: {stderr}");
+    
+    // If linking succeeded, report it
+    if output.status.success() {
+        eprintln!("Generated executable: {}", executable_name);
+    }
 
     if !output.status.success() {
         return Err(format!(

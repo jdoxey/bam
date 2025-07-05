@@ -298,6 +298,13 @@ jobs:
             cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/" || echo "WARNING: libunwind.dll not found"
             cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" || echo "WARNING: libwinpthread-1.dll not found"
             
+            # Also copy MinGW runtime DLLs that generated executables might need
+            echo "Copying MinGW runtime DLLs for generated executables"
+            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libwinpthread-1.dll not found"
+            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libomp.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libomp.dll not found"
+            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libc++.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libc++.dll not found"
+            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libunwind.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libunwind.dll not found"
+            
             echo "DLLs copied - checking what's actually in package directory:"
             ls -la "$PACKAGE_DIR/"*.dll 2>/dev/null || echo "No DLLs found in package directory!"
           fi
@@ -332,10 +339,27 @@ jobs:
           [[ "${{ matrix.os }}" == "windows-latest" ]] && TEST_OUTPUT_EXE="test.exe"
           if [[ -f "$TEST_OUTPUT_EXE" ]]; then
             echo "Running $TEST_OUTPUT_EXE:"
-            OUTPUT=$(./$TEST_OUTPUT_EXE)
-            echo "$OUTPUT"
-            if [[ "$OUTPUT" != "$TEST_MESSAGE" ]]; then
-              echo "Error: End-to-end test output mismatch!"
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              # On Windows, try to get more info about why the executable might fail
+              echo "Executable size: $(stat -c%s "$TEST_OUTPUT_EXE" 2>/dev/null || echo "unknown")"
+              echo "Trying to run executable..."
+            fi
+            
+            if OUTPUT=$(./$TEST_OUTPUT_EXE 2>&1); then
+              echo "$OUTPUT"
+              if [[ "$OUTPUT" != "$TEST_MESSAGE" ]]; then
+                echo "Error: End-to-end test output mismatch!"
+                echo "Expected: $TEST_MESSAGE"
+                echo "Actual: $OUTPUT"
+                exit 1
+              fi
+            else
+              EXIT_CODE=$?
+              echo "Error: Executable failed to run with exit code $EXIT_CODE"
+              echo "Output: $OUTPUT"
+              if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+                echo "This may indicate missing runtime DLLs or incompatible executable format."
+              fi
               exit 1
             fi
           else
