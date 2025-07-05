@@ -53,8 +53,8 @@ jobs:
             target: aarch64-apple-darwin
           - os: windows-latest
             lld_name: ld.lld.exe # Generic name for lld, actual file might be rust-lld.exe
-            artifact_name: x86_64-pc-windows-msvc
-            target: x86_64-pc-windows-msvc
+            artifact_name: x86_64-pc-windows-gnu
+            target: x86_64-pc-windows-gnu
 
     steps:
       - uses: actions/checkout@v4
