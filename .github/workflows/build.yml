@@ -292,10 +292,14 @@ jobs:
             
             echo "Copying essential LLVM DLLs for clang execution"
             # Copy essential DLLs that clang.exe needs to run
-            cp "$ARCHIVE_DIR/bin/libclang-cpp.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libclang-cpp.dll not found"
-            cp "$ARCHIVE_DIR/bin/libc++.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libc++.dll not found"
-            cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libunwind.dll not found"
-            cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libwinpthread-1.dll not found"
+            cp "$ARCHIVE_DIR/bin/libLLVM-20.dll" "$PACKAGE_DIR/" || echo "ERROR: libLLVM-20.dll not found - clang will not work!"
+            cp "$ARCHIVE_DIR/bin/libclang-cpp.dll" "$PACKAGE_DIR/" || echo "ERROR: libclang-cpp.dll not found"
+            cp "$ARCHIVE_DIR/bin/libc++.dll" "$PACKAGE_DIR/" || echo "WARNING: libc++.dll not found"
+            cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/" || echo "WARNING: libunwind.dll not found"
+            cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" || echo "WARNING: libwinpthread-1.dll not found"
+            
+            echo "DLLs copied - checking what's actually in package directory:"
+            ls -la "$PACKAGE_DIR/"*.dll 2>/dev/null || echo "No DLLs found in package directory!"
           fi
 
           echo "Package contents:"
