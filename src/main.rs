@@ -208,21 +208,22 @@ fn link_with_clang(
     }
 
     // Use correct target triple for MinGW UCRT
+    // Let clang automatically handle startup objects and library linking
     cmd.arg("-target")
         .arg("x86_64-w64-mingw32")
         .arg("-fuse-ld=lld")
         .arg("-v") // Add verbose output for debugging
         .arg(format!("-L{}", lib_path.display())) // Library search path
-        // Explicitly specify CRT startup objects for UCRT
-        .arg(lib_path.join("crt2.o").to_string_lossy().as_ref())
-        .arg(lib_path.join("crtbegin.o").to_string_lossy().as_ref())
         .arg(object_file) // Our object file
-        .arg(lib_path.join("crtend.o").to_string_lossy().as_ref())
         .arg("-o")
         .arg(executable_name)
         .arg("-lucrt") // Use UCRT instead of msvcrt
         .arg("-lkernel32")
         .arg("-Wl,-subsystem,console");
+        
+    // Debug: print the command we're about to run
+    eprintln!("Clang command: {} {}", clang_path.display(), 
+              cmd.get_args().map(|arg| arg.to_string_lossy()).collect::<Vec<_>>().join(" "));
 
     let output = cmd
         .output()
