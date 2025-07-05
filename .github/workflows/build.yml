@@ -258,17 +258,37 @@ jobs:
           cp "${{ steps.bam_exe.outputs.source_bam_path }}" "$PACKAGE_DIR/${{ steps.bam_exe.outputs.bam_exe_name }}"
 
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "Copying mingw import-libs to package/lib"
+            echo "Copying essential MinGW libraries to package/lib"
             ARCHIVE_DIR="${LLVM_EXTRACT_DIR}/${LLVM_TARBALL_NAME%.zip}"
             mkdir -p "$PACKAGE_DIR/lib"
-            # Copy required import-libs and CRT startup objects
-            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmsvcrt.a" "$PACKAGE_DIR/lib/"
-            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libkernel32.a" "$PACKAGE_DIR/lib/"
-            cp "$ARCHIVE_DIR/${LIB_SUBPATH}"/*.o "$PACKAGE_DIR/lib/"
+            
+            # Copy essential import libraries
+            echo "Copying essential import libraries..."
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libkernel32.a" "$PACKAGE_DIR/lib/" || echo "libkernel32.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libucrt.a" "$PACKAGE_DIR/lib/" || echo "libucrt.a not found - trying msvcrt"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmsvcrt.a" "$PACKAGE_DIR/lib/" || echo "libmsvcrt.a not found"
+            
+            # Copy essential CRT startup objects
+            echo "Copying CRT startup objects..."
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/crt2.o" "$PACKAGE_DIR/lib/" || echo "crt2.o not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/crtbegin.o" "$PACKAGE_DIR/lib/" || echo "crtbegin.o not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/crtend.o" "$PACKAGE_DIR/lib/" || echo "crtend.o not found"
+            
+            # Copy additional important MinGW runtime libraries
+            echo "Copying MinGW runtime libraries..."
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmingw32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libmingw32.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmingwex.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libmingwex.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libgcc.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libgcc.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libgcc_eh.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libgcc_eh.a not found"
+            
+            echo "Libraries copied to package/lib:"
+            ls -la "$PACKAGE_DIR/lib/"
+            
             echo "Copying bundled clang and driver to package"
             cp "$ARCHIVE_DIR/bin/clang.exe" "$PACKAGE_DIR/"
-            cp "$ARCHIVE_DIR/bin/clang-20.exe" "$PACKAGE_DIR/"
-            chmod +x "$PACKAGE_DIR/clang.exe" "$PACKAGE_DIR/clang-20.exe"
+            cp "$ARCHIVE_DIR/bin/clang-20.exe" "$PACKAGE_DIR/" 2>/dev/null || echo "clang-20.exe not found"
+            chmod +x "$PACKAGE_DIR/clang.exe"
+            [[ -f "$PACKAGE_DIR/clang-20.exe" ]] && chmod +x "$PACKAGE_DIR/clang-20.exe"
           fi
 
           echo "Package contents:"

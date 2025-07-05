@@ -198,27 +198,29 @@ fn link_with_clang(
     executable_name: &str,
 ) -> Result<(), String> {
     let mut cmd = process::Command::new(clang_path);
-    // Use clang with LLD to link COFF. First include CRT startup objects from ./lib
-    if let Ok(entries) = fs::read_dir("lib") {
-        for entry in entries {
-            let path = entry
-                .map_err(|e| format!("Failed reading lib dir: {e}"))?
-                .path();
-            if path.extension().and_then(|s| s.to_str()) == Some("o") {
-                cmd.arg(path);
-            }
-        }
+    
+    // Determine the lib path relative to clang executable
+    let clang_dir = clang_path.parent().ok_or("Cannot get clang directory")?;
+    let lib_path = clang_dir.join("lib");
+    
+    if !lib_path.exists() {
+        return Err(format!("Library path not found: {}", lib_path.display()));
     }
-    // Then linkage settings: target triple, use lld, user object, output name, and import-libs
-    // Use MinGW target triple to match the MinGW libraries being distributed
+    
+    // Use correct target triple for MinGW UCRT
     cmd.arg("-target")
-        .arg("x86_64-pc-windows-gnu")
+        .arg("x86_64-w64-mingw32")
         .arg("-fuse-ld=lld")
-        .arg(object_file)
+        .arg("-v") // Add verbose output for debugging
+        .arg(format!("-L{}", lib_path.display())) // Library search path
+        // Explicitly specify CRT startup objects for UCRT
+        .arg(lib_path.join("crt2.o").to_string_lossy().as_ref())
+        .arg(lib_path.join("crtbegin.o").to_string_lossy().as_ref())
+        .arg(object_file) // Our object file
+        .arg(lib_path.join("crtend.o").to_string_lossy().as_ref())
         .arg("-o")
         .arg(executable_name)
-        .arg("-L./lib")
-        .arg("-lmsvcrt")
+        .arg("-lucrt") // Use UCRT instead of msvcrt
         .arg("-lkernel32")
         .arg("-Wl,-subsystem,console");
 
@@ -228,7 +230,8 @@ fn link_with_clang(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Clang linking failed: {stderr}"));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!("Clang linking failed:\nSTDOUT: {stdout}\nSTDERR: {stderr}"));
     }
     Ok(())
 }
