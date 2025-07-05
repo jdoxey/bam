@@ -198,15 +198,15 @@ fn link_with_clang(
     executable_name: &str,
 ) -> Result<(), String> {
     let mut cmd = process::Command::new(clang_path);
-    
+
     // Determine the lib path relative to clang executable
     let clang_dir = clang_path.parent().ok_or("Cannot get clang directory")?;
     let lib_path = clang_dir.join("lib");
-    
+
     if !lib_path.exists() {
         return Err(format!("Library path not found: {}", lib_path.display()));
     }
-    
+
     // Use correct target triple for MinGW UCRT
     cmd.arg("-target")
         .arg("x86_64-w64-mingw32")
@@ -231,7 +231,9 @@ fn link_with_clang(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!("Clang linking failed:\nSTDOUT: {stdout}\nSTDERR: {stderr}"));
+        return Err(format!(
+            "Clang linking failed:\nSTDOUT: {stdout}\nSTDERR: {stderr}"
+        ));
     }
     Ok(())
 }
