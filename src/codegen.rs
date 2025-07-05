@@ -43,7 +43,7 @@ impl CodeGenerator {
         } else if cfg!(target_os = "linux") && cfg!(target_arch = "aarch64") {
             "aarch64-unknown-linux-gnu"
         } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
-            "x86_64-pc-windows-msvc"
+            "x86_64-w64-mingw32"
         } else {
             panic!(
                 "Unsupported target combination: {} {}",

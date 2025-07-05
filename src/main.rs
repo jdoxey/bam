@@ -194,8 +194,9 @@ fn link_with_clang(
         }
     }
     // Then linkage settings: target triple, use lld, user object, output name, and import-libs
+    // Use MinGW target triple to match the MinGW libraries being distributed
     cmd.arg("-target")
-        .arg("x86_64-pc-windows-msvc")
+        .arg("x86_64-w64-mingw32")
         .arg("-fuse-ld=lld")
         .arg(object_file)
         .arg("-o")
