@@ -255,10 +255,10 @@ fn link_with_clang(
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     eprintln!("Clang exit status: {}", output.status);
-    eprintln!("Clang STDOUT: {}", stdout);
-    eprintln!("Clang STDERR: {}", stderr);
+    eprintln!("Clang STDOUT: {stdout}");
+    eprintln!("Clang STDERR: {stderr}");
 
     if !output.status.success() {
         return Err(format!(
