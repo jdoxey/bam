@@ -85,7 +85,7 @@ impl CodeGenerator {
         puts_sig.call_conv = if cfg!(target_os = "linux") {
             cranelift_codegen::isa::CallConv::SystemV
         } else if cfg!(target_os = "windows") {
-            cranelift_codegen::isa::CallConv::SystemV // Use SystemV for MinGW/UCRT
+            cranelift_codegen::isa::CallConv::WindowsFastcall
         } else {
             // For macOS, use SystemV since we confirmed it works for basic cases
             cranelift_codegen::isa::CallConv::SystemV
@@ -128,7 +128,7 @@ impl CodeGenerator {
         sig.call_conv = if cfg!(target_os = "linux") {
             cranelift_codegen::isa::CallConv::SystemV
         } else if cfg!(target_os = "windows") {
-            cranelift_codegen::isa::CallConv::SystemV // Use SystemV for MinGW/UCRT
+            cranelift_codegen::isa::CallConv::WindowsFastcall
         } else {
             // For macOS, use SystemV since we confirmed it works for basic cases
             cranelift_codegen::isa::CallConv::SystemV
