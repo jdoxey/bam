@@ -207,6 +207,24 @@ fn link_with_clang(
         return Err(format!("Library path not found: {}", lib_path.display()));
     }
 
+    // Debug: list contents of lib directory
+    eprintln!("Contents of lib directory:");
+    if let Ok(entries) = std::fs::read_dir(&lib_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                eprintln!("  {}", entry.file_name().to_string_lossy());
+            }
+        }
+    }
+
+    // Check if ld.lld.exe exists next to clang.exe
+    let lld_path = clang_dir.join("ld.lld.exe");
+    if lld_path.exists() {
+        eprintln!("Found LLD at: {}", lld_path.display());
+    } else {
+        eprintln!("LLD not found at: {}", lld_path.display());
+    }
+
     // Use correct target triple for MinGW UCRT
     // Let clang automatically handle startup objects and library linking
     cmd.arg("-target")
@@ -219,7 +237,9 @@ fn link_with_clang(
         .arg(executable_name)
         .arg("-lucrt") // Use UCRT instead of msvcrt
         .arg("-lkernel32")
-        .arg("-Wl,-subsystem,console");
+        .arg("-Wl,-subsystem,console")
+        // Explicitly tell clang where to find the linker if it exists
+        .arg(format!("-B{}", clang_dir.display()));
 
     // Debug: print the command we're about to run
     eprintln!(
@@ -235,11 +255,17 @@ fn link_with_clang(
         .output()
         .map_err(|e| format!("Failed to execute clang for linking: {e}"))?;
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    eprintln!("Clang exit status: {}", output.status);
+    eprintln!("Clang STDOUT: {}", stdout);
+    eprintln!("Clang STDERR: {}", stderr);
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
         return Err(format!(
-            "Clang linking failed:\nSTDOUT: {stdout}\nSTDERR: {stderr}"
+            "Clang linking failed with exit code {}:\nSTDOUT: {stdout}\nSTDERR: {stderr}",
+            output.status.code().unwrap_or(-1)
         ));
     }
     Ok(())
