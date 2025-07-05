@@ -44,17 +44,29 @@ fn compile_program(statements: &[Stmt]) -> Vec<u8> {
 }
 
 fn link_executable(object_file: &str, executable_name: &str) -> Result<(), String> {
-    // On Windows, prefer bundled clang driver for proper COFF linking (with UCRT/Mingw)
     #[cfg(target_os = "windows")]
     {
-        if let Ok(clang_path) = get_bundled_clang() {
-            println!("Using bundled clang for linking: {}", clang_path.display());
-            return link_with_clang(&clang_path, object_file, executable_name);
+        // On Windows, we must use the bundled clang driver which is packaged with the
+        // necessary MinGW libraries and configuration.
+        match get_bundled_clang() {
+            Ok(clang_path) => {
+                println!("Using bundled clang for linking: {}", clang_path.display());
+                link_with_clang(&clang_path, object_file, executable_name)
+            }
+            Err(e) => Err(format!(
+                "{e}.\nBam on Windows requires the bundled clang.exe for linking.\n\
+                Please ensure you are running a packaged version of bam from the releases page, or\n\
+                if developing, ensure clang.exe and the required MinGW libraries are in the correct location."
+            )),
         }
     }
-    // Fallback to LLD linker
-    let lld_path = get_lld_for_linking()?;
-    link_with_lld(&lld_path, object_file, executable_name)
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // For other OSes (Linux/macOS), find LLD and link directly.
+        let lld_path = get_lld_for_linking()?;
+        link_with_lld(&lld_path, object_file, executable_name)
+    }
 }
 
 fn get_lld_for_linking() -> Result<PathBuf, String> {
@@ -324,29 +336,6 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg("-L/lib64") // Add lib64 path
             .arg("-dynamic-linker")
             .arg(linker_path); // Set dynamic linker path
-
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to execute LLD: {e}"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("LLD linking failed: {stderr}"));
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let mut cmd = process::Command::new(lld_path);
-
-        cmd.arg("-flavor")
-            .arg("link") // Use MSVC linker interface
-            .arg(format!("/out:{executable_name}"))
-            .arg(object_file) // Our object file
-            .arg("/defaultlib:msvcrt") // Link against MSVC runtime
-            .arg("/defaultlib:kernel32") // Link against kernel32
-            .arg("/subsystem:console") // Console application
-            .arg("/libpath:./lib"); // Add bundled lib directory
 
         let output = cmd
             .output()
