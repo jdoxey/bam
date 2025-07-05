@@ -69,6 +69,7 @@ fn link_executable(object_file: &str, executable_name: &str) -> Result<(), Strin
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn get_lld_for_linking() -> Result<PathBuf, String> {
     // 1. Try bundled LLD first (for packaged installations)
     match get_bundled_lld() {
@@ -107,6 +108,7 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
     ))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn get_bundled_lld_path() -> PathBuf {
     // Get expected path for bundled rust-lld (may not exist)
     if let Ok(exe_path) = env::current_exe() {
@@ -133,6 +135,7 @@ fn get_bundled_lld_path() -> PathBuf {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn get_bundled_lld() -> Result<PathBuf, String> {
     // Look for rust-lld in same directory as bam executable
     let lld_path = get_bundled_lld_path();
@@ -150,6 +153,7 @@ fn get_bundled_lld() -> Result<PathBuf, String> {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn get_rust_lld() -> Result<PathBuf, String> {
     // Try to find rust-lld from the current Rust toolchain
     let output = process::Command::new("rustc")
@@ -229,6 +233,7 @@ fn link_with_clang(
     Ok(())
 }
 
+#[cfg(not(target_os = "windows"))]
 fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
