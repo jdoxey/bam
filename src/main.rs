@@ -210,10 +210,8 @@ fn link_with_clang(
     // Debug: list contents of lib directory
     eprintln!("Contents of lib directory:");
     if let Ok(entries) = std::fs::read_dir(&lib_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                eprintln!("  {}", entry.file_name().to_string_lossy());
-            }
+        for entry in entries.flatten() {
+            eprintln!("  {}", entry.file_name().to_string_lossy());
         }
     }
 
