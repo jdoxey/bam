@@ -289,6 +289,13 @@ jobs:
             cp "$ARCHIVE_DIR/bin/clang-20.exe" "$PACKAGE_DIR/" 2>/dev/null || echo "clang-20.exe not found"
             chmod +x "$PACKAGE_DIR/clang.exe"
             [[ -f "$PACKAGE_DIR/clang-20.exe" ]] && chmod +x "$PACKAGE_DIR/clang-20.exe"
+            
+            echo "Copying essential LLVM DLLs for clang execution"
+            # Copy essential DLLs that clang.exe needs to run
+            cp "$ARCHIVE_DIR/bin/libclang-cpp.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libclang-cpp.dll not found"
+            cp "$ARCHIVE_DIR/bin/libc++.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libc++.dll not found"
+            cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libunwind.dll not found"
+            cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "libwinpthread-1.dll not found"
           fi
 
           echo "Package contents:"
