@@ -282,7 +282,21 @@ jobs:
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libshell32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libshell32.a not found"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libuser32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libuser32.a not found"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmoldname.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libmoldname.a not found"
-            cp "$ARCHIVE_DIR/lib/clang/20/lib/windows/libclang_rt.builtins-x86_64.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libclang_rt.builtins-x86_64.a not found"
+
+            # HACK: The packaged clang seems to have a hardcoded path lookup for the compiler-rt library
+            # that is relative to the parent of its install directory, ignoring the --sysroot flag.
+            # To work around this, we create the exact directory structure it's looking for in the
+            # root of the workspace and copy the library there with the expected name.
+            echo "Applying workaround for clang compiler-rt path issue..."
+            WORKAROUND_PATH="lib/clang/20/lib/x86_64-w64-windows-gnu"
+            mkdir -p "$WORKAROUND_PATH"
+            SOURCE_BUILTINS_PATH="$ARCHIVE_DIR/lib/clang/20/lib/windows/libclang_rt.builtins-x86_64.a"
+            DEST_BUILTINS_PATH="$WORKAROUND_PATH/libclang_rt.builtins.a"
+            echo "Copying builtins from $SOURCE_BUILTINS_PATH to $DEST_BUILTINS_PATH"
+            cp "$SOURCE_BUILTINS_PATH" "$DEST_BUILTINS_PATH" || { echo "Failed to copy compiler-rt builtins for workaround"; exit 1; }
+
+            # Also copy the renamed builtins library into the package's lib folder for consistency.
+            cp "$DEST_BUILTINS_PATH" "$PACKAGE_DIR/lib/" || { echo "Failed to copy compiler-rt builtins to package/lib"; exit 1; }
             
             echo "Libraries copied to package/lib:"
             ls -la "$PACKAGE_DIR/lib/"
