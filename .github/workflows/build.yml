@@ -332,9 +332,6 @@ jobs:
         shell: bash
         run: |
           cd package
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            export PATH=$PWD/lib:$PATH
-          fi
           TEST_MESSAGE="Hello from ${{ env.BUILD_TYPE }} build! Version: ${{ steps.version.outputs.version }}"
           echo "print(message: \"$TEST_MESSAGE\")" > test.bam
 
