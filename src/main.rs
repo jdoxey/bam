@@ -228,13 +228,12 @@ fn link_with_clang(
     cmd.arg("-target")
         .arg("x86_64-w64-mingw32")
         .arg("-fuse-ld=lld")
+        .arg("--rtlib=compiler-rt")
         .arg("-v") // Add verbose output for debugging
         .arg(format!("-L{}", lib_path.display())) // Library search path
         .arg(object_file) // Our object file
         .arg("-o")
         .arg(executable_name)
-        .arg("-lucrt") // Use UCRT instead of msvcrt
-        .arg("-lkernel32")
         .arg("-Wl,-subsystem,console")
         // Explicitly tell clang where to find the linker if it exists
         .arg(format!("-B{}", clang_dir.display()))

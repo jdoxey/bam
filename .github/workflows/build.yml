@@ -278,8 +278,10 @@ jobs:
             echo "Copying MinGW runtime libraries..."
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmingw32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libmingw32.a not found"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmingwex.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libmingwex.a not found"
-            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libgcc.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libgcc.a not found"
-            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libgcc_eh.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libgcc_eh.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libadvapi32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libadvapi32.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libshell32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libshell32.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libuser32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libuser32.a not found"
+            cp "$ARCHIVE_DIR/lib/clang/20/lib/windows/libclang_rt.builtins-x86_64.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libclang_rt.builtins-x86_64.a not found"
             
             echo "Libraries copied to package/lib:"
             ls -la "$PACKAGE_DIR/lib/"
@@ -294,16 +296,6 @@ jobs:
             # Copy essential DLLs that clang.exe needs to run
             cp "$ARCHIVE_DIR/bin/libLLVM-20.dll" "$PACKAGE_DIR/" || echo "ERROR: libLLVM-20.dll not found - clang will not work!"
             cp "$ARCHIVE_DIR/bin/libclang-cpp.dll" "$PACKAGE_DIR/" || echo "ERROR: libclang-cpp.dll not found"
-            cp "$ARCHIVE_DIR/bin/libc++.dll" "$PACKAGE_DIR/" || echo "WARNING: libc++.dll not found"
-            cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/" || echo "WARNING: libunwind.dll not found"
-            cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" || echo "WARNING: libwinpthread-1.dll not found"
-            
-            # Also copy MinGW runtime DLLs that generated executables might need
-            echo "Copying MinGW runtime DLLs for generated executables"
-            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libwinpthread-1.dll not found"
-            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libomp.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libomp.dll not found"
-            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libc++.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libc++.dll not found"
-            cp "$ARCHIVE_DIR/x86_64-w64-mingw32/bin/libunwind.dll" "$PACKAGE_DIR/" 2>/dev/null || echo "MinGW libunwind.dll not found"
             
             echo "DLLs copied - checking what's actually in package directory:"
             ls -la "$PACKAGE_DIR/"*.dll 2>/dev/null || echo "No DLLs found in package directory!"
