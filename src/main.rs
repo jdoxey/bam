@@ -229,6 +229,7 @@ fn link_with_clang(
         .arg("x86_64-w64-mingw32")
         .arg("-fuse-ld=lld")
         .arg("--rtlib=compiler-rt")
+        .arg("-static")
         .arg("-v") // Add verbose output for debugging
         .arg(format!("-L{}", lib_path.display())) // Library search path
         .arg(object_file) // Our object file
