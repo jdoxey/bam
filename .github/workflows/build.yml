@@ -281,6 +281,7 @@ jobs:
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libadvapi32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libadvapi32.a not found"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libshell32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libshell32.a not found"
             cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libuser32.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libuser32.a not found"
+            cp "$ARCHIVE_DIR/${LIB_SUBPATH}/libmoldname.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libmoldname.a not found"
             cp "$ARCHIVE_DIR/lib/clang/20/lib/windows/libclang_rt.builtins-x86_64.a" "$PACKAGE_DIR/lib/" 2>/dev/null || echo "libclang_rt.builtins-x86_64.a not found"
             
             echo "Libraries copied to package/lib:"
