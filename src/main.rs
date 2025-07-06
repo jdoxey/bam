@@ -96,7 +96,7 @@ fn get_lld_for_linking() -> Result<PathBuf, String> {
     // 3. No LLD found - provide helpful error message
     Err(format!(
         "No LLD linker found.\n\
-        \n
+        \n\
         For development: Ensure Rust is properly installed via rustup.\n\
         For distribution: Re-download the complete bam package from:\n\
         https://github.com/jdoxey/bam/releases\n\
@@ -237,7 +237,8 @@ fn link_with_clang(
         .arg("-lkernel32")
         .arg("-Wl,-subsystem,console")
         // Explicitly tell clang where to find the linker if it exists
-        .arg(format!("-B{}", clang_dir.display()));
+        .arg(format!("-B{}", clang_dir.display()))
+            .arg(format!("--sysroot={}", clang_dir.display()));
 
     // Debug: print the command we're about to run
     eprintln!(
@@ -381,7 +382,7 @@ fn link_with_lld(lld_path: &Path, object_file: &str, executable_name: &str) -> R
             .arg(format!("-L/lib/{lib_dir}")) // Add another library search path
             .arg("-L/lib64") // Add lib64 path
             .arg("-dynamic-linker")
-            .arg(linker_path); // Set dynamic linker path
+            .arg(linker_path);
 
         let output = cmd
             .output()
