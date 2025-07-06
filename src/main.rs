@@ -238,7 +238,7 @@ fn link_with_clang(
         .arg("-Wl,-subsystem,console")
         // Explicitly tell clang where to find the linker if it exists
         .arg(format!("-B{}", clang_dir.display()))
-            .arg(format!("--sysroot={}", clang_dir.display()));
+        .arg(format!("--sysroot={}", clang_dir.display()));
 
     // Debug: print the command we're about to run
     eprintln!(
