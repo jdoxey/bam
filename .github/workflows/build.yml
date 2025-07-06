@@ -248,7 +248,8 @@ jobs:
           fi
 
           SOURCE_LLD_PATH="$LLVM_EXTRACT_DIR/$LLVM_BIN_SUBPATH/$EXTRACTED_LLD_NAME"
-          DEST_LLD_PATH="$PACKAGE_DIR/$PACKAGED_LLD_NAME"
+          mkdir -p "$PACKAGE_DIR/bin"
+          DEST_LLD_PATH="$PACKAGE_DIR/bin/$PACKAGED_LLD_NAME"
 
           echo "Copying LLD from ${SOURCE_LLD_PATH} to ${DEST_LLD_PATH}"
           cp "${SOURCE_LLD_PATH}" "${DEST_LLD_PATH}"
@@ -301,22 +302,23 @@ jobs:
             echo "Libraries copied to package/lib:"
             ls -la "$PACKAGE_DIR/lib/"
             
-            echo "Copying bundled clang and driver to package"
-            cp "$ARCHIVE_DIR/bin/clang.exe" "$PACKAGE_DIR/"
-            cp "$ARCHIVE_DIR/bin/clang-20.exe" "$PACKAGE_DIR/" 2>/dev/null || echo "clang-20.exe not found"
-            chmod +x "$PACKAGE_DIR/clang.exe"
-            [[ -f "$PACKAGE_DIR/clang-20.exe" ]] && chmod +x "$PACKAGE_DIR/clang-20.exe"
+            echo "Copying bundled clang and driver to package/bin"
+            mkdir -p "$PACKAGE_DIR/bin"
+            cp "$ARCHIVE_DIR/bin/clang.exe" "$PACKAGE_DIR/bin/"
+            cp "$ARCHIVE_DIR/bin/clang-20.exe" "$PACKAGE_DIR/bin/" 2>/dev/null || echo "clang-20.exe not found"
+            chmod +x "$PACKAGE_DIR/bin/clang.exe"
+            [[ -f "$PACKAGE_DIR/bin/clang-20.exe" ]] && chmod +x "$PACKAGE_DIR/bin/clang-20.exe"
             
             echo "Copying essential LLVM DLLs for clang execution"
             # Copy essential DLLs that clang.exe needs to run
-            cp "$ARCHIVE_DIR/bin/libLLVM-20.dll" "$PACKAGE_DIR/" || echo "ERROR: libLLVM-20.dll not found - clang will not work!"
-            cp "$ARCHIVE_DIR/bin/libclang-cpp.dll" "$PACKAGE_DIR/" || echo "ERROR: libclang-cpp.dll not found"
-            cp "$ARCHIVE_DIR/bin/libc++.dll" "$PACKAGE_DIR/" || echo "WARNING: libc++.dll not found"
-            cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/" || echo "WARNING: libunwind.dll not found"
-            cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/" || echo "WARNING: libwinpthread-1.dll not found"
+            cp "$ARCHIVE_DIR/bin/libLLVM-20.dll" "$PACKAGE_DIR/bin/" || echo "ERROR: libLLVM-20.dll not found - clang will not work!"
+            cp "$ARCHIVE_DIR/bin/libclang-cpp.dll" "$PACKAGE_DIR/bin/" || echo "ERROR: libclang-cpp.dll not found"
+            cp "$ARCHIVE_DIR/bin/libc++.dll" "$PACKAGE_DIR/bin/" || echo "WARNING: libc++.dll not found"
+            cp "$ARCHIVE_DIR/bin/libunwind.dll" "$PACKAGE_DIR/bin/" || echo "WARNING: libunwind.dll not found"
+            cp "$ARCHIVE_DIR/bin/libwinpthread-1.dll" "$PACKAGE_DIR/bin/" || echo "WARNING: libwinpthread-1.dll not found"
             
             echo "DLLs copied - checking what's actually in package directory:"
-            ls -la "$PACKAGE_DIR/"*.dll 2>/dev/null || echo "No DLLs found in package directory!"
+            ls -la "$PACKAGE_DIR/bin/"*.dll 2>/dev/null || echo "No DLLs found in package directory!"
           fi
 
           echo "Package contents:"
@@ -324,7 +326,7 @@ jobs:
 
           if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
             echo "Verifying dynamic dependencies of packaged LLD on macOS:"
-            otool -L "$PACKAGE_DIR/${{ env.PACKAGED_LLD_NAME }}" # Should be package/lld
+            otool -L "$PACKAGE_DIR/bin/${{ env.PACKAGED_LLD_NAME }}" # Should be package/bin/lld
           fi
 
       - name: Test compilation end-to-end

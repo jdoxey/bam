@@ -181,9 +181,16 @@ fn get_rust_lld() -> Result<PathBuf, String> {
 fn get_bundled_clang() -> Result<PathBuf, String> {
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
+            // First look for clang.exe next to bam.exe
             let clang = exe_dir.join("clang.exe");
             if clang.exists() {
                 return Ok(clang);
+            }
+
+            // Fallback to a bin/ subdirectory (newer package layout)
+            let clang_bin = exe_dir.join("bin").join("clang.exe");
+            if clang_bin.exists() {
+                return Ok(clang_bin);
             }
         }
     }
@@ -201,7 +208,12 @@ fn link_with_clang(
 
     // Determine the lib path relative to clang executable
     let clang_dir = clang_path.parent().ok_or("Cannot get clang directory")?;
-    let lib_path = clang_dir.join("lib");
+    let clang_root = if clang_dir.ends_with("bin") {
+        clang_dir.parent().unwrap_or(clang_dir)
+    } else {
+        clang_dir
+    };
+    let lib_path = clang_root.join("lib");
 
     if !lib_path.exists() {
         return Err(format!("Library path not found: {}", lib_path.display()));
