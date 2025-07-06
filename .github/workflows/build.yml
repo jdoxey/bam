@@ -285,10 +285,10 @@ jobs:
 
             # HACK: The packaged clang seems to have a hardcoded path lookup for the compiler-rt library
             # that is relative to the parent of its install directory, ignoring the --sysroot flag.
-            # To work around this, we create the exact directory structure it's looking for in the
-            # root of the workspace and copy the library there with the expected name.
+            # To work around this, we replicate that directory structure inside the package directory
+            # and copy the library there with the expected name.
             echo "Applying workaround for clang compiler-rt path issue..."
-            WORKAROUND_PATH="lib/clang/20/lib/x86_64-w64-windows-gnu"
+            WORKAROUND_PATH="$PACKAGE_DIR/lib/clang/20/lib/x86_64-w64-windows-gnu"
             mkdir -p "$WORKAROUND_PATH"
             SOURCE_BUILTINS_PATH="$ARCHIVE_DIR/lib/clang/20/lib/windows/libclang_rt.builtins-x86_64.a"
             DEST_BUILTINS_PATH="$WORKAROUND_PATH/libclang_rt.builtins.a"
